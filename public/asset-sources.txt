@@ -1,0 +1,4 @@
+Google Ads product icon: https://www.gstatic.com/images/branding/productlogos/ads/v5/192px.svg
+Source page: https://business.google.com/us/google-ads/
+Manrope variable font: https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2
+License: manrope-OFL.txt

@@ -1,0 +1,357 @@
+{
+  "period": "01 a 23 out 2026",
+  "timezone": "America/Sao_Paulo",
+  "sourceLabel": "Diagn?stico hist?rico ? outubro de 2026",
+  "metrics": {
+    "impressions": 12276,
+    "clicks": 1467,
+    "spend": 4126.59,
+    "buttonConversions": 437,
+    "contacts": 854,
+    "commercial": 444,
+    "qualified": 326,
+    "proposals": 253,
+    "googleIndicated": 145,
+    "googleCommercial": 115,
+    "googleQualified": 81,
+    "googleProposals": 59,
+    "otherChannels": 446,
+    "unknownSource": 261,
+    "conflictingSource": 2,
+    "confirmedEvents": 44,
+    "confirmedRevenue": null
+  },
+  "campaigns": [
+    {
+      "id": "24301654707",
+      "name": "Pesquisa • RNTRC • Exata e Frase",
+      "clicks": 702,
+      "spend": 2111.23,
+      "conversions": 222.99
+    },
+    {
+      "id": "24314052375",
+      "name": "Pesquisa • RNTRC • Ampla",
+      "clicks": 765,
+      "spend": 2015.36,
+      "conversions": 214.01
+    }
+  ],
+  "termCoverage": {
+    "clicks": 1093,
+    "percent": 74.5
+  },
+  "contacts": [
+    {
+      "id": "demo-01",
+      "label": "Contato 01",
+      "firstInboundAt": "2026-10-02T22:34:12Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-01"
+    },
+    {
+      "id": "demo-02",
+      "label": "Contato 02",
+      "firstInboundAt": "2026-10-04T15:59:51Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": false,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-02"
+    },
+    {
+      "id": "demo-03",
+      "label": "Contato 03",
+      "firstInboundAt": "2026-10-05T09:27:10Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-03"
+    },
+    {
+      "id": "demo-04",
+      "label": "Contato 04",
+      "firstInboundAt": "2026-10-05T23:18:08Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-04"
+    },
+    {
+      "id": "demo-05",
+      "label": "Contato 05",
+      "firstInboundAt": "2026-10-05T23:21:16Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": false,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-05"
+    },
+    {
+      "id": "demo-06",
+      "label": "Contato 06",
+      "firstInboundAt": "2026-10-06T03:49:39Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": false,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-06"
+    },
+    {
+      "id": "demo-07",
+      "label": "Contato 07",
+      "firstInboundAt": "2026-10-06T10:57:30Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-07"
+    },
+    {
+      "id": "demo-08",
+      "label": "Contato 08",
+      "firstInboundAt": "2026-10-06T17:52:34Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-08"
+    },
+    {
+      "id": "demo-09",
+      "label": "Contato 09",
+      "firstInboundAt": "2026-10-06T19:11:55Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-09"
+    },
+    {
+      "id": "demo-10",
+      "label": "Contato 10",
+      "firstInboundAt": "2026-10-06T20:18:26Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-10"
+    },
+    {
+      "id": "demo-11",
+      "label": "Contato 11",
+      "firstInboundAt": "2026-10-06T20:22:27Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-11"
+    },
+    {
+      "id": "demo-12",
+      "label": "Contato 12",
+      "firstInboundAt": "2026-10-06T22:13:55Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-12"
+    },
+    {
+      "id": "demo-13",
+      "label": "Contato 13",
+      "firstInboundAt": "2026-10-06T22:31:41Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": false,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-13"
+    },
+    {
+      "id": "demo-14",
+      "label": "Contato 14",
+      "firstInboundAt": "2026-10-06T22:53:39Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-14"
+    },
+    {
+      "id": "demo-15",
+      "label": "Contato 15",
+      "firstInboundAt": "2026-10-07T05:50:33Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": false,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-15"
+    },
+    {
+      "id": "demo-16",
+      "label": "Contato 16",
+      "firstInboundAt": "2026-10-07T09:48:48Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": false,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-16"
+    },
+    {
+      "id": "demo-17",
+      "label": "Contato 17",
+      "firstInboundAt": "2026-10-07T13:33:58Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-17"
+    },
+    {
+      "id": "demo-18",
+      "label": "Contato 18",
+      "firstInboundAt": "2026-10-07T14:12:08Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": false,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-18"
+    },
+    {
+      "id": "demo-19",
+      "label": "Contato 19",
+      "firstInboundAt": "2026-10-07T14:49:04Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-19"
+    },
+    {
+      "id": "demo-20",
+      "label": "Contato 20",
+      "firstInboundAt": "2026-10-07T15:09:00Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-20"
+    },
+    {
+      "id": "demo-21",
+      "label": "Contato 21",
+      "firstInboundAt": "2026-10-07T16:43:45Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-21"
+    },
+    {
+      "id": "demo-22",
+      "label": "Contato 22",
+      "firstInboundAt": "2026-10-07T17:24:35Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-22"
+    },
+    {
+      "id": "demo-23",
+      "label": "Contato 23",
+      "firstInboundAt": "2026-10-07T19:47:14Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": true,
+      "replied": true,
+      "conversationId": "demo-conversation-23"
+    },
+    {
+      "id": "demo-24",
+      "label": "Contato 24",
+      "firstInboundAt": "2026-10-07T21:01:48Z",
+      "source": "Google indicado",
+      "category": "Interesse comercial",
+      "qualified": true,
+      "proposal": false,
+      "replied": true,
+      "conversationId": "demo-conversation-24"
+    }
+  ],
+  "conversation": {
+    "contactId": "demo-09",
+    "contactLabel": "Contato 09",
+    "date": "06/10/2026",
+    "messages": [
+      {
+        "at": "16:11",
+        "author": "Contato",
+        "text": "Ol?, vim pelo site da JBR e preciso de assessoria para cadastro RNTRC."
+      },
+      {
+        "at": "16:13",
+        "author": "Contato",
+        "text": "Qual o valor?"
+      },
+      {
+        "at": "16:30",
+        "author": "Rafaele",
+        "text": "Boa tarde, tudo bem? Cadastro ANTT ser? para cargas ou passageiros?"
+      },
+      {
+        "at": "16:30",
+        "author": "Contato",
+        "text": "Cargas"
+      },
+      {
+        "at": "16:34",
+        "author": "Rafaele",
+        "text": "Deseja fazer no CPF ou CNPJ?"
+      },
+      {
+        "at": "16:50",
+        "author": "Contato",
+        "text": "CPF"
+      }
+    ],
+    "conversationId": "demo-conversation-09"
+  },
+  "attendance": {
+    "inside": 82,
+    "insideAnswered": 82,
+    "insideMedian": 4.0,
+    "outside": 63,
+    "outsideAnswered": 61,
+    "outsideMedian": 485.4,
+    "openAtCollection": 124
+  }
+}

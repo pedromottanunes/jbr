@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jbr_crm
+      POSTGRES_USER: jbr_crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD no ambiente local}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - jbr_crm_pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jbr_crm -d jbr_crm"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+volumes:
+  jbr_crm_pg:

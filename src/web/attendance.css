@@ -1,0 +1,36 @@
+.conversation-tabs{display:flex;align-items:center;gap:6px;border-bottom:1px solid #dce4ef;margin:0 0 18px}
+.conversation-tabs button{border:0;border-bottom:2px solid transparent;background:none;padding:10px 14px;color:#64758e;font-size:13px;font-weight:700}
+.conversation-tabs button[aria-selected=true]{color:#2458c6;border-bottom-color:#2458c6}
+.attendance-period-slot{min-width:0}.attendance-period{display:flex;gap:10px;align-items:center;margin:0;flex-wrap:wrap}
+.attendance-period label{display:flex;align-items:center;gap:7px;font-size:12px;color:#596b83}
+.attendance-period input{min-height:38px;padding:8px 10px;border:1px solid #d9e1eb}
+.attendance-period button{min-height:38px;padding:8px 16px}
+.attendance-notice-slot:empty{display:none}.attendance-notice{position:relative;color:#7b591e;font-size:11px;line-height:1.5}.attendance-notice summary{display:flex;align-items:center;gap:5px;list-style:none;white-space:nowrap;cursor:pointer;padding:6px 9px;border:1px solid #f1e1bd;border-radius:6px;background:#fff8e9;font-weight:700}.attendance-notice summary::-webkit-details-marker{display:none}.attendance-notice summary:hover{background:#fff1d5}.attendance-notice summary b{font-size:10px}.attendance-notice>div{position:absolute;top:calc(100% + 8px);right:0;width:min(320px,85vw);padding:12px;background:#fff8e9;border:1px solid #f1e1bd;border-radius:8px;box-shadow:0 8px 20px #172b4d1a;z-index:10;white-space:normal}
+.attendance-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}
+.attendance-kpis article{background:#fff;border:1px solid #e1e7ef;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.attendance-kpis article:first-child{background:#172d50;border-color:#172d50;color:#fff}
+.attendance-kpis article span{font-size:13px;font-weight:700;color:#596b83;display:flex;align-items:center;gap:8px}
+.attendance-kpis article:first-child span,.attendance-kpis article:first-child small{color:#c5d4e8}
+.attendance-kpis article svg{color:#3b73c4;flex:none}.attendance-kpis article:first-child svg{color:#e5ee7a}
+.attendance-kpis strong{font-size:28px;letter-spacing:-.04em;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.attendance-kpis small{font-size:11px;color:#6c7d95;line-height:1.4}
+.attendance-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.attendance-timing{margin-bottom:16px}.attendance-timing .attendance-heading{margin-bottom:14px}.attendance-timing-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.timing-card{min-width:0;padding:12px 14px;background:#f5f8fd;border:1px solid #e0e9f5;border-radius:8px}.timing-category{display:block;font-size:10px;line-height:1.4;color:#74839a;font-weight:700;text-transform:uppercase;letter-spacing:.035em}.timing-card h3{display:flex;align-items:center;gap:6px;margin:7px 0 10px;color:#405e86;font-size:12px;line-height:1.4}.timing-card h3 svg{flex:none;color:#547ac0}.timing-card strong{font-size:25px;line-height:1;color:#1b487e;font-weight:800;font-variant-numeric:tabular-nums}.timing-conversations{background:#f8faff}.timing-total{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}.timing-total span,.timing-details{font-size:11px;color:#6c7d95}.timing-details{display:grid;gap:5px;margin-top:11px;line-height:1.35}.timing-details b{color:#243b5c;margin-left:3px}.attendance-timing>p{font-size:11px;color:#718198;line-height:1.5;margin:10px 0 0}
+.cta-breakdown{margin-top:12px;font-size:12px;color:#506783}.cta-breakdown summary{width:fit-content;cursor:pointer;font-weight:700;line-height:1.5}.cta-breakdown summary span{font-weight:500;color:#718198;margin-left:5px}.cta-breakdown-content{margin-top:10px;border:1px solid #e1e7ef;border-radius:8px;overflow:hidden}.cta-table-scroll{max-height:340px;overflow:auto}.cta-table-scroll table{font-size:12px}.cta-table-scroll th{position:sticky;top:0;background:#f6f8fb;height:auto;padding:10px 12px}.cta-table-scroll td{padding:10px 12px;line-height:1.5}.cta-table-scroll th:last-child,.cta-table-scroll td:last-child{text-align:right;width:85px;font-variant-numeric:tabular-nums}.cta-breakdown-content>p{margin:0;padding:10px 12px;background:#f9fafc;color:#718198;font-size:11px;line-height:1.5}
+.attendance-card{min-width:0}.attendance-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+.attendance-heading h2{margin:0;font-size:16px}.attendance-heading>span{font-size:11px;color:#728198}
+.attendance-band{display:grid;grid-template-columns:110px 1fr 34px;gap:12px;align-items:center;margin:13px 0;font-size:12px}
+.attendance-band>div{height:8px;background:#edf1f7;border-radius:6px;overflow:hidden}.attendance-band i{height:100%;display:block;border-radius:6px;background:#3973c6}
+.attendance-band:nth-of-type(2) i{background:#11876f}.attendance-band b{text-align:right}
+.attendance-average{display:flex;justify-content:space-between;border-top:1px solid #edf1f6;padding-top:14px;margin-top:17px;font-size:12px;color:#62718a}.attendance-average b{color:#172b4d}
+.attendance-chart{height:185px;display:flex;flex-direction:column}.attendance-bars{height:150px;display:flex;align-items:end;gap:3px;border-bottom:1px solid #e1e7ef}.attendance-bar-wrap{flex:1;height:100%;display:flex;align-items:end;min-width:0}.attendance-bar-wrap i{display:block;width:100%;min-width:1px;background:#477ccd;border-radius:3px 3px 0 0}
+.attendance-axis{display:flex;justify-content:space-between;margin-top:8px;color:#718198;font-size:11px}
+.attendance-empty{min-height:120px;display:grid;place-items:center;color:#728198;font-size:12px;text-align:center}
+.attendance-coverage{font-size:12px;color:#66778e;margin-top:16px;line-height:1.6}.attendance-coverage summary{cursor:pointer;font-weight:700;color:#445e82}.attendance-coverage summary span{font-weight:400;margin-left:8px;color:#728198}.attendance-coverage p{max-width:950px}
+@media(max-width:1000px){.attendance-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1100px){.attendance-period{gap:6px}.attendance-period label{gap:4px}.attendance-period input{padding:8px 5px}.attendance-notice summary b{display:none}}
+@media(max-width:700px){.attendance-grid{grid-template-columns:1fr}.attendance-kpis{gap:10px}.attendance-kpis article{padding:14px}.attendance-kpis strong{font-size:24px}.attendance-kpis article span{font-size:12px}.attendance-heading h2{font-size:15px}}
+@media(max-width:850px){.attendance-timing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.timing-card:last-child{grid-column:auto}}
+@media(max-width:480px){.attendance-timing-grid{grid-template-columns:1fr}.timing-card{padding:11px 12px}.timing-details{display:flex;flex-wrap:wrap;gap:5px 12px}}
+
+.timing-saturdayInside{background:#eff9f4;border-color:#cee9db}.timing-saturdayInside strong,.timing-saturdayInside h3{color:#087658}.timing-weekdayOutside,.timing-saturdayOutside{background:#fffbf2;border-color:#f1e6c9}.timing-sunday{background:#f6f2fc;border-color:#e6dcf5}
