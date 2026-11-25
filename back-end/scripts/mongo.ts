@@ -2,7 +2,8 @@ import 'dotenv/config';
 import {connectMongo} from '../src/mongo/connection.js';
 import {ensureSchema,checkSchema} from '../src/mongo/schema.js';
 import {enqueue,jobStatus,type JobKind} from '../src/mongo/jobs.js';
-import {runWorkerOnce,schedule} from '../src/mongo/worker.js';
+import {runWorkerOnce} from '../src/mongo/worker.js';
+import {runWorkerLoop} from '../src/mongo/worker-loop.js';
 import {readFile,appendFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomBytes} from 'node:crypto';
@@ -37,11 +38,7 @@ async function main(){
   }
   if(command==='worker'){
    console.log('Worker Atlas ativo.');
-   let nextSchedule=0,nextMaintenance=0,failures=0;
-   while(!stopping){
-    try{if(Date.now()>=nextMaintenance){await maintainPublications(ctx,shutdown.signal);nextMaintenance=Date.now()+60000;}if(process.env.INTEGRATIONS_ENABLED==='true'){if(process.env.SYNC_SCHEDULER_ENABLED==='true'&&Date.now()>=nextSchedule){await schedule(ctx);nextSchedule=Date.now()+60000;}await runWorkerOnce(ctx,shutdown.signal);}else await resumeContentPurge(ctx,shutdown.signal);failures=0;}catch{if(!stopping){failures++;console.error('Worker aguardando recuperação da conexão.');}}
-    if(!stopping)await wait(process.env.INTEGRATIONS_ENABLED!=='true'?30000:Math.min(60000,5000*2**Math.min(failures,4)));
-   }return;
+   await runWorkerLoop(ctx,shutdown.signal);return;
   }
   if(['google','umbler','budget'].includes(command)){
    if(process.env.APP_MODE!=='mongo'||process.env.INTEGRATIONS_ENABLED!=='true')throw new Error('As integrações Atlas precisam estar ativadas.');

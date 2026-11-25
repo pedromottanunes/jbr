@@ -7,6 +7,7 @@ import { type Ads, type ContactPage, type Overview, formatMoney, formatNumber, g
 import { type Status, ConnectedConversations, ConnectedReports, ConnectedSettings } from './ConnectedPages';
 import { Leads } from './Leads';
 import {AttendanceSyncProvider} from './AttendanceSync';
+import {SessionControl} from './Auth';
 import { PaidTraffic } from './PaidTraffic';
 import { FunnelOverview as ConnectedOverview } from './FunnelOverview';
 
@@ -96,6 +97,6 @@ export function App() {
   if(status.isPending||status.error) return <QueryState isPending={status.isPending} error={status.error}>{null}</QueryState>;
   const live=['local','mongo'].includes(status.data?.mode??'');
   return <div className="shell"><button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>{open && <div className="scrim" onClick={() => setOpen(false)} />}
-    <aside className={`sidebar ${open ? 'open' : ''}`}><div className="brand"><img src="/jbr-logo-white.webp" alt="Grupo JBR Brasil" /><span className="brand-product">CRM <i/> JBR</span><button className="close-menu" onClick={() => setOpen(false)} aria-label="Fechar menu"><X /></button></div><nav aria-label="Menu principal">{nav.map(n => <NavLink key={n.to} to={n.to} end={n.to === '/'} onClick={() => setOpen(false)}><n.icon size={19} strokeWidth={1.8} /><span>{n.label}</span></NavLink>)}</nav><div className="sidebar-bottom"><span className="status-dot" /> Ambiente local</div></aside>
+    <aside className={`sidebar ${open ? 'open' : ''}`}><div className="brand"><img src="/jbr-logo-white.webp" alt="Grupo JBR Brasil" /><span className="brand-product">CRM <i/> JBR</span><button className="close-menu" onClick={() => setOpen(false)} aria-label="Fechar menu"><X /></button></div><nav aria-label="Menu principal">{nav.map(n => <NavLink key={n.to} to={n.to} end={n.to === '/'} onClick={() => setOpen(false)}><n.icon size={19} strokeWidth={1.8} /><span>{n.label}</span></NavLink>)}</nav><div className="sidebar-bottom"><SessionControl/></div></aside>
     <main className="content" key={location.pathname}><AttendanceSyncProvider mode={status.data!.mode} enabled={['/','/conversas'].includes(location.pathname)}><Routes><Route path="/" element={live?<ConnectedOverview status={status.data!}/>:<OverviewPage />} /><Route path="/trafego" element={live?<PaidTraffic/>:<AdsPage />} /><Route path="/conversas" element={live?<ConnectedConversations status={status.data!}/>:<ConversationsPage />} /><Route path="/leads" element={live?<Leads status={status.data!}/>:<LeadsPage />} /><Route path="/relatorios" element={live?<ConnectedReports status={status.data!}/>:<ReportsPage />} /><Route path="/configuracoes" element={live?<ConnectedSettings status={status.data!}/>:<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></AttendanceSyncProvider></main></div>;
 }

@@ -35,6 +35,8 @@
     "mongo:repack": "tsx back-end/scripts/mongo-repack.ts",
     "build:web": "vite build --config front-end/vite.config.ts",
     "verify:layout": "tsx back-end/scripts/verify-layout.ts",
+    "render:prepare": "tsx back-end/scripts/prepare-render.ts",
+    "render:verify": "tsx back-end/scripts/verify-render.ts",
     "build:api": "esbuild back-end/src/index.ts --bundle --platform=node --format=esm --packages=external --outfile=back-end/dist/server.js && esbuild back-end/scripts/mongo.ts --bundle --platform=node --format=esm --packages=external --outfile=back-end/dist/worker.js",
     "typecheck": "tsc -p front-end/tsconfig.json && tsc -p back-end/tsconfig.json"
   },

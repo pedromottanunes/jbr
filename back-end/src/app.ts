@@ -8,20 +8,26 @@ import { registerLocalData } from './local-data.js';
 import {connectMongo,type MongoContext} from './mongo/connection.js';
 import {checkSchema} from './mongo/schema.js';
 import {registerMongoData} from './mongo/routes.js';
+import {authConfig,registerAuth} from './auth.js';
+import {runWorkerLoop} from './mongo/worker-loop.js';
+import {WorkerStopping} from './mongo/cancellation.js';
 
 export function buildApp(options: { mode?: string; databasePath?: string;mongo?:MongoContext } = {}) {
   const production = process.env.NODE_ENV === 'production';
   const mode = options.mode ?? process.env.APP_MODE ?? 'demo';
   if (!['demo','local','mongo'].includes(mode)) throw new Error('APP_MODE inválido.');
-  if (mode !== 'demo' && (production || !['127.0.0.1','localhost','::1'].includes(process.env.HOST ?? '127.0.0.1'))) throw new Error('Dados reais locais exigem loopback e ambiente de desenvolvimento.');
-  if (production && process.env.ALLOW_PUBLIC_DEMO !== 'true') throw new Error('Demo pública desabilitada. Defina autenticação antes da publicação.');
+  if (mode==='local'&&production)throw new Error('Dados locais exigem loopback em desenvolvimento. Use APP_MODE=mongo no servidor.');
+  if (mode !== 'demo' && !production && !['127.0.0.1','localhost','::1'].includes(process.env.HOST ?? '127.0.0.1')) throw new Error('Dados reais locais exigem loopback e ambiente de desenvolvimento.');
+  if (mode==='demo'&&production&&process.env.ALLOW_PUBLIC_DEMO !== 'true') throw new Error('Demo pública desabilitada.');
+  const authentication=production&&mode==='mongo'?authConfig():null;
+  if(process.env.EMBEDDED_WORKER==='true'&&mode!=='mongo')throw new Error('EMBEDDED_WORKER exige APP_MODE=mongo.');
   const app = Fastify({ bodyLimit: 65536, requestTimeout:30000, connectionTimeout:30000, disableRequestLogging: mode !== 'demo', logger: { redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'] }, trustProxy: production });
   app.register(helmet, { contentSecurityPolicy: false });
   app.register(rateLimit, { max: 90, timeWindow: '1 minute' });
 
   app.addHook('onRequest', async (request,reply) => {
     reply.header('Cache-Control','private, no-store');
-    if(mode!=='demo') {
+    if(mode!=='demo'&&!production) {
       const validHost=/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(request.headers.host ?? '');
       const origin=request.headers.origin;
       const validOrigin=!origin || [process.env.APP_ORIGIN ?? 'http://127.0.0.1:5173','http://localhost:5173','http://127.0.0.1:3000'].includes(origin);
@@ -29,8 +35,8 @@ export function buildApp(options: { mode?: string; databasePath?: string;mongo?:
     }
   });
   app.get('/api/health', async () => ({ status: 'ok', mode }));
-  // Serve the same build locally before deployment; the real-data production
-  // guard above remains until authentication and permissions are implemented.
+  if(!authentication)app.get('/api/v1/auth/session',async()=>({required:false,authenticated:true}));
+  // The public shell contains no customer data; Mongo API routes require a session.
   if (production || process.env.SERVE_WEB==='true') {
     const dist = fileURLToPath(new URL('../../front-end/dist/', import.meta.url));
     app.register(fastifyStatic, { root: dist, wildcard: false });
@@ -45,7 +51,19 @@ export function buildApp(options: { mode?: string; databasePath?: string;mongo?:
       const status=typeof code==='number'&&code>=400&&code<=503?code:500;
       return reply.code(status).send({message:status>=500?'Não foi possível consultar o banco de dados.':'Parâmetros inválidos.'});
     });
-    if(mode==='mongo')app.register(async instance=>{const ctx=options.mongo??await connectMongo();if(!options.mongo)instance.addHook('onClose',()=>ctx.close());await checkSchema(ctx);registerMongoData(instance,ctx);});
+    if(mode==='mongo')app.register(async instance=>{
+      const ctx=options.mongo??await connectMongo();
+      const shutdown=new AbortController();
+      let worker:Promise<void>|undefined;
+      instance.addHook('onClose',async()=>{shutdown.abort(new WorkerStopping());await worker;if(!options.mongo)await ctx.close();});
+      await checkSchema(ctx);
+      if(authentication)await registerAuth(instance,ctx,authentication);
+      registerMongoData(instance,ctx);
+      if(process.env.EMBEDDED_WORKER==='true')instance.addHook('onListen',async()=>{
+        instance.log.info('Worker integrado ativo; fila persistida no Atlas.');
+        worker=runWorkerLoop(ctx,shutdown.signal,message=>instance.log.warn(message));
+      });
+    });
     else registerLocalData(app,options.databasePath); return app;
   }
   app.get('/api/v1/status',async()=>({mode:'demo'}));

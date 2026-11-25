@@ -11,4 +11,4 @@ Execute na raiz do repositório:
 
 O `.env`, `local-data`, `package.json` e as dependências continuam na raiz. O servidor compilado entrega a interface de `front-end/dist`; execute `npm run build` para gerar ambos. Os endpoints `/api/*`, callback OAuth local e regras de acesso mantêm os mesmos endereços e comportamento.
 
-As respostas usadas pela interface têm contratos em `shared/contracts.ts`, sem dependências do servidor. A reorganização não muda o banco nem habilita publicação pública sem autenticação.
+As respostas usadas pela interface têm contratos em `shared/contracts.ts`, sem dependências do servidor. Em produção, `APP_MODE=mongo` exige login; `auth.ts` mantém sessões no Atlas. `EMBEDDED_WORKER=true` executa a fila no próprio Web Service. Veja [Render](../RENDER.md).

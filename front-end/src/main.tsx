@@ -3,10 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
+import {AuthGate} from './Auth';
 import './style.css';
 import './design.css';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1, refetchOnWindowFocus: false } } });
 createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><QueryClientProvider client={queryClient}><BrowserRouter><App /></BrowserRouter></QueryClientProvider></React.StrictMode>
+  <React.StrictMode><QueryClientProvider client={queryClient}><BrowserRouter><AuthGate><App /></AuthGate></BrowserRouter></QueryClientProvider></React.StrictMode>
 );

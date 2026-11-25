@@ -27,7 +27,7 @@ Execute os comandos abaixo a partir da raiz `CRM JBR`. Há um único `package-lo
 
 `npm run build:web` compila a interface e `npm run build:api` compila servidor e worker. `npm run build` verifica os tipos e compila ambos; `npm run verify:layout`, após o build, confere páginas, assets e rotas de API. Os contratos em `shared/contracts.ts` são verificados tanto no servidor quanto na interface.
 
-Para o Render, a **Root Directory deve continuar vazia** (raiz do repositório), pois os dois serviços utilizam `shared` e as dependências da raiz. Os comandos permanecem `npm start` para Web Service e `npm run start:worker` para Background Worker. A preparação de autenticação para publicação continua pendente.
+Para o Render, a **Root Directory deve continuar vazia** (raiz do repositório). O Web Service usa `npm start` e pode processar a fila com `EMBEDDED_WORKER=true`. Login e sessões no Atlas protegem os dados reais. Veja a configuração completa em [Deploy no Render](RENDER.md).
 
 ## Executar localmente
 
@@ -43,7 +43,7 @@ Abra `http://127.0.0.1:5173`. A configuração inicial usa `APP_MODE=demo`, com 
 
 Validação: `npm run check`, `npm run test:collector` e `npm run build`. Os recursos de sábado, desempenho dos atendentes e saldo estão descritos em [Implementação local](IMPLEMENTACAO.md).
 
-O repositório contém código, testes e documentação. Credenciais privadas, dumps e estudos com dados reais ficam fora do Git; os dados operacionais ficam no Atlas. A aplicação continua local. Persistência e worker já foram adaptados; autenticação, permissões e ensaio de restauração ainda são necessários para publicar no Render.
+O repositório contém código, testes e documentação. Credenciais privadas, dumps e estudos com dados reais ficam fora do Git; os dados operacionais ficam no Atlas. O acesso online usa um administrador com sessão de 12 horas. Contas individuais e níveis de permissão são uma evolução posterior. O plano Free processa atualizações enquanto o Web Service estiver ativo.
 
 O objetivo é acompanhar a jornada entre aquisição, contato pelo WhatsApp, atendimento e resultado comercial. A plataforma reunirá métricas do Google Ads, conversas provenientes do Umbler Talk e cadastro de leads, com identidade visual inspirada em `Land Page Atualizada`.
 

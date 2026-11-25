@@ -13,13 +13,15 @@ export type ContactPage = { items: Contact[]; nextCursor: string | null; totalIn
 
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/v1${path}`, { signal:AbortSignal.any([AbortSignal.timeout(30000),...(signal?[signal]:[])]), credentials: 'same-origin' });
+  if(response.status===401)window.dispatchEvent(new Event('crm-session-expired'));
   if (!response.ok) throw new Error(`Falha ao carregar dados (${response.status}).`);
   return response.json() as Promise<T>;
 }
 
 export async function sendJson<T>(path:string,method:'POST'|'PUT',body:unknown):Promise<T>{
  const response=await fetch('/api/v1'+path,{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
- const data=await response.json();if(!response.ok)throw new Error(data.message??'Não foi possível salvar.');return data as T;
+ if(response.status===401&&path!=='/auth/login')window.dispatchEvent(new Event('crm-session-expired'));
+ const data=await response.json();if(!response.ok)throw new Error(response.status===429?'Muitas tentativas. Aguarde um minuto e tente novamente.':data.message??'Não foi possível salvar.');return data as T;
 }
 
 export const formatNumber = (n: number) => new Intl.NumberFormat('pt-BR').format(n);
