@@ -18,7 +18,7 @@ try {
   const assets=[...html.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)].map(match=>match[1]);
   assert.ok(assets.some(path=>path.endsWith('.js')));
   assert.ok(assets.some(path=>path.endsWith('.css')));
-  for(const url of [...assets,'/google-ads.svg','/jbr-logo.webp','/jbr-logo-white.webp','/manrope-latin.woff2']){
+  for(const url of [...assets,'/google-ads.svg','/jbr-logo.webp','/jbr-logo-white.webp','/login-jbr-road.webp','/manrope-latin.woff2']){
     const response=await app.inject(url);
     assert.equal(response.statusCode,200,url);
     assert.doesNotMatch(String(response.headers['content-type']),/text\/html/,url);
