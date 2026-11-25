@@ -2,6 +2,33 @@
 
 CRM para acompanhar aquisição, leads e atendimento da JBR. Integra Google Ads e leitura de conversas do Umbler Talk, com persistência no MongoDB Atlas, identificação dos CTAs do site, indicadores por atendente e orçamento de conta consultado na API. Não envia mensagens pelo WhatsApp.
 
+## Organização do código
+
+```text
+CRM JBR/
+  front-end/
+    src/             # páginas React, componentes e estilos
+    public/          # imagens, ícones e fontes
+    index.html
+    vite.config.ts
+    dist/            # interface compilada (gerada, fora do Git)
+  back-end/
+    src/             # API Fastify, integrações e persistência MongoDB
+    scripts/         # worker, OAuth, importação e verificações
+    migrations/      # SQL legado, sem uso no Atlas
+    dist/            # servidor e worker compilados (gerados)
+  shared/            # contratos da API e regras comuns, sem segredos
+  package.json       # comandos e dependências de todo o projeto
+  .env               # configuração privada do backend, fora do Git
+  local-data/        # arquivos locais privados, fora do Git
+```
+
+Execute os comandos abaixo a partir da raiz `CRM JBR`. Há um único `package-lock.json`. A separação de pastas preserva as URLs: `/`, `/trafego`, `/conversas`, `/leads`, `/relatorios`, `/configuracoes` e `/api/*`. O front-end acessa a API pela mesma origem; no desenvolvimento, o proxy Vite encaminha `/api` à porta 3000. No build, o servidor entrega `front-end/dist` e mantém o fallback das páginas React sem transformar erros de API em HTML.
+
+`npm run build:web` compila a interface e `npm run build:api` compila servidor e worker. `npm run build` verifica os tipos e compila ambos; `npm run verify:layout`, após o build, confere páginas, assets e rotas de API. Os contratos em `shared/contracts.ts` são verificados tanto no servidor quanto na interface.
+
+Para o Render, a **Root Directory deve continuar vazia** (raiz do repositório), pois os dois serviços utilizam `shared` e as dependências da raiz. Os comandos permanecem `npm start` para Web Service e `npm run start:worker` para Background Worker. A preparação de autenticação para publicação continua pendente.
+
 ## Executar localmente
 
 Requer Node.js da linha 22, versão 22.18 ou superior, e acesso ao Atlas. API, interface e worker usam Node; Python/PowerShell permanecem apenas no legado e no assistente OAuth local.

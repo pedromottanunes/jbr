@@ -74,7 +74,7 @@ npm ci
 npm run dev
 ```
 
-Abrir `http://127.0.0.1:5173`. A API fica em `http://127.0.0.1:3000`. O proxy Vite encaminha `/api` para a API. `npm run check` executa tipos e testes; `npm run build` gera `dist/web` e `dist/server.js`.
+Abrir `http://127.0.0.1:5173`. A API fica em `http://127.0.0.1:3000`. O proxy Vite encaminha `/api` para a API. `npm run check` executa tipos e testes; `npm run build` gera `front-end/dist` e `back-end/dist/server.js`.
 
 `APP_MODE=demo` é o único modo habilitado. Em produção, o servidor recusa iniciar a demo pública sem uma liberação explícita, para evitar expor a amostra como CRM conectado. Não usar `ALLOW_PUBLIC_DEMO` como substituto de autenticação.
 

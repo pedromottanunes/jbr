@@ -86,7 +86,7 @@ SYNC_SCHEDULER_ENABLED=false
 | `npm run mongo:verify` | Testes Atlas isolados com dados fictícios |
 | `npm run mongo:backup` | Exportação privada com compressão, contagens e hashes |
 | `npm run check` / `npm run build` | Tipos, testes e build |
-| `npm run start:worker` | Worker compilado em `dist/worker.js` |
+| `npm run start:worker` | Worker compilado em `back-end/dist/worker.js` |
 
 O importador aceita `npm run mongo:import -- --from DIRETORIO` para ensaio sem escrita, e `--apply` para importar. Um backup já concluído é reconhecido e não é regravado; outra importação sobre uma base publicada é recusada. Para migrar alterações posteriores, é necessário um procedimento incremental, sem sobrepor a base ativa.
 
