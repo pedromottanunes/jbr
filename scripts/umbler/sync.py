@@ -147,6 +147,7 @@ def sync(db, max_requests, days):
         print(f'Sincronização {status}: {done}/{total} conversas, {client.attempts} chamadas.',flush=True)
 
 def main():
+    c.require_legacy_mode()
     parser=argparse.ArgumentParser()
     parser.add_argument('--import-from',type=Path)
     parser.add_argument('--sync',action='store_true')

@@ -1,6 +1,13 @@
 #requires -Version 5.1
 param([string]$Start,[string]$End)
 $ErrorActionPreference='Stop'
+
+$taskConfigPath=Join-Path $PSScriptRoot '../.env'
+if ((Test-Path -LiteralPath $taskConfigPath) -and (Get-Content -LiteralPath $taskConfigPath | Select-String -Pattern '^APP_MODE=mongo\s*$' -Quiet)) {
+    Write-Host 'Coletor SQLite desativado no modo Atlas. Use npm run sync:google ou npm run sync:attendance.'
+    exit 1
+}
+
 $mutex=New-Object System.Threading.Mutex($false,'Local\CRMJBR-GoogleAdsSync')
 $locked=$false
 $secure=$null

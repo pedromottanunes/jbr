@@ -28,6 +28,18 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 
 BASE_URL = "https://app-utalk.umbler.com/api"
+
+def require_legacy_mode():
+    """Avoid running a second collector against the same providers after cutover."""
+    mode = os.environ.get('APP_MODE')
+    env_path = Path(__file__).resolve().parents[2] / '.env'
+    if mode is None and env_path.exists():
+        for line in env_path.read_text(encoding='utf-8-sig').splitlines():
+            if line.startswith('APP_MODE='):
+                mode = line.split('=', 1)[1].strip().strip('"\'')
+    if mode == 'mongo':
+        raise SystemExit('Coletor legado desativado. Execute npm run sync:attendance para usar o Atlas.')
+
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 WHATSAPP_TYPES = {
     "OrganizationBrokerWhatsappChannelReferenceModel",
@@ -969,6 +981,7 @@ def run_status(db: sqlite3.Connection, org_id: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    require_legacy_mode()
     parser = argparse.ArgumentParser(description="Coletor de leitura das conversas WhatsApp do Umbler Talk")
     parser.add_argument("command", choices=("probe", "sync", "status", "export"))
     parser.add_argument("--org-id", default=os.environ.get("UTALK_ORGANIZATION_ID"))

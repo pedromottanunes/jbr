@@ -1,7 +1,7 @@
 import type {DatabaseSync} from 'node:sqlite';
 import type {FastifyInstance} from 'fastify';
 import {groupLeads} from './funnel.js';
-import {ctaTexts,matchCtaRecord} from './cta.js';
+import {ctaTexts,ctaRecordFor} from './cta.js';
 import {timeGroup,timeLabels,defaultAttendanceConfig,type AttendanceConfig,type TimeBucket} from '../shared/business-hours.js';
 
 type Event={at:string;incoming:number;source:string|null};
@@ -19,7 +19,7 @@ export function ctaByTime(leads:ReturnType<typeof groupLeads>,start:string,end:s
   if(!lead.enteredAt)continue;const date=day(lead.enteredAt);if(date<start||date>end)continue;
   const incoming=lead.messages.find(m=>m.incoming&&day(m.at)<=end);
   if(!incoming||Math.abs(Date.parse(incoming.at)-Date.parse(lead.enteredAt))>=1000){result.unknownFirstMessage++;continue;}
-  const cta=matchCtaRecord(incoming.content);if(!cta)continue;
+  const cta=ctaRecordFor(incoming);if(!cta)continue;
   counts.set(cta.text,(counts.get(cta.text)??0)+1);
   result.total++;const group=timeGroup(lead.enteredAt,config);buckets[group.bucket]++;if(group.outside)result.outside++;else result.inside++;if(group.weekend)result.weekend++;
  }
@@ -55,9 +55,16 @@ export function attendance(conversations:Conversation[],start:string,end:string,
  return {period:{start,end},config,buckets:Object.fromEntries(Object.entries(buckets).map(([k,g])=>[k,summarizeGroup(g)])) as Record<TimeBucket,ReturnType<typeof summarizeGroup>>,total,observed,answered,withoutObservedReply:observed-answered,unknown,partial,noMessages,excluded,medianMinutes:median(times),averageMinutes:times.length?times.reduce((a,b)=>a+b,0)/times.length:null,outsideHours:summarizeGroup(outside),weekend:summarizeGroup(weekend),bands,days:[...byDay.values()].sort((a,b)=>a.date.localeCompare(b.date))};
 }
 
-export function registerAttendance(app:FastifyInstance,db:DatabaseSync,getConfig:()=>AttendanceConfig=()=>defaultAttendanceConfig){
+export function registerAttendance(app:FastifyInstance,db:DatabaseSync|(()=>Promise<{conversations:Conversation[];leads:ReturnType<typeof groupLeads>}>),getConfig:()=>AttendanceConfig|Promise<AttendanceConfig>=()=>defaultAttendanceConfig){
  let version:string|null=null,cache:Conversation[]|null=null,leads:ReturnType<typeof groupLeads>=[];
+ const reports=new Map<string,ReturnType<typeof attendance>&{cta:ReturnType<typeof ctaByTime>}>();
  app.get<{Querystring:{start:string;end:string}}>('/api/v1/attendance',{schema:{querystring:{type:'object',required:['start','end'],additionalProperties:false,properties:{start:{type:'string',pattern:'^\\d{4}-\\d{2}-\\d{2}$'},end:{type:'string',pattern:'^\\d{4}-\\d{2}-\\d{2}$'}}}}},async req=>{
+  if(typeof db==='function'){
+   const [d,config]=await Promise.all([db(),getConfig()]);if(cache!==d.conversations||leads!==d.leads){reports.clear();cache=d.conversations;leads=d.leads;}
+   const key=JSON.stringify([req.query.start,req.query.end,config]);let result=reports.get(key);
+   if(!result){result={...attendance(d.conversations,req.query.start,req.query.end,config),cta:ctaByTime(d.leads,req.query.start,req.query.end,config)};reports.set(key,result);if(reports.size>12)reports.delete(reports.keys().next().value!);}
+   return result;
+  }
   const current=String(db.prepare("SELECT value FROM crm_meta WHERE key='publishedAt'").get()?.value??'');
   if(!cache||version!==current){
    db.exec('BEGIN');try{
@@ -72,11 +79,11 @@ export function registerAttendance(app:FastifyInstance,db:DatabaseSync,getConfig
      const memberId=String(e.chat_id).split(':')[0]+':'+raw.sentByOrganizationMember?.id;
      const automated=raw.scheduledMessage||raw.bulkSendSession||['Failed','Error','Processing','Retrying','Submitted','Deleted','Redacted'].includes(raw.messageState)||['Reaction','CallAttempt'].includes(raw.messageType);
      const source=e.source==='Member'&&(automated||(hasRoster&&!humans.has(memberId)))?null:e.source?String(e.source):null;map.get(String(e.chat_id))?.events.push({at:String(e.at),incoming:Number(e.incoming),source});
-     leadMessages.push({contactId:String(e.contact_id),chatId:String(e.chat_id),id:String(e.id),at:String(e.at),incoming:Number(e.incoming),content:String(e.content),source});
+     leadMessages.push({contactId:String(e.contact_id),chatId:String(e.chat_id),id:String(e.id),at:String(e.at),incoming:Number(e.incoming),content:String(e.content),...(raw.ctaKey!==undefined?{ctaKey:raw.ctaKey}:{}),source});
     }
     const grouped=groupLeads(contacts,leadMessages);db.exec('COMMIT');cache=next;leads=grouped;version=current;
    }catch(e){db.exec('ROLLBACK');throw e;}
   }
-  const config=getConfig();return {...attendance(cache,req.query.start,req.query.end,config),cta:ctaByTime(leads,req.query.start,req.query.end,config)};
+  const config=await getConfig();return {...attendance(cache,req.query.start,req.query.end,config),cta:ctaByTime(leads,req.query.start,req.query.end,config)};
  });
 }

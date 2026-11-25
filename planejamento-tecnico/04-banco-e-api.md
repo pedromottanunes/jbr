@@ -1,5 +1,7 @@
 # Banco de dados e API interna
 
+> Atualização de 24/11/2026: este modelo SQL é uma referência histórica. O banco definitivo será MongoDB Atlas; coleções, índices, importação e preservação dos contratos existentes estão no [plano MongoDB](../MONGODB.md). Não executar migrations SQL para configurar o Atlas.
+
 ## Modelo físico proposto
 
 IDs internos UUID; IDs de provedores como texto; instantes em `timestamptz`; data de métrica em `date` e fuso da conta em campo próprio. Dinheiro comercial em `numeric(18,2)` com moeda; custo Google preservado em `bigint` micros; conversões em `numeric(20,6)` e payload bruto preserva a precisão original. Valores decimais e IDs grandes trafegam como strings quando necessário para evitar perda de precisão em JavaScript.

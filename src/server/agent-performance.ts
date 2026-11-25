@@ -3,7 +3,7 @@ import type {FastifyInstance} from 'fastify';
 import {spawn} from 'node:child_process';
 import {resolve} from 'node:path';
 import {businessMinutes,localDay,timeGroup,type AttendanceConfig} from '../shared/business-hours.js';
-import {validPeriod} from '../shared/period.js';
+import {validPeriod,type Period} from '../shared/period.js';
 
 export type Agent={id:string;name:string;human:boolean;active:boolean};
 export type ServiceMessage={id:string;at:string;source:string;memberId:string|null;private:boolean;valid:boolean};
@@ -86,11 +86,16 @@ export function performance(chats:ServiceChat[],agents:Agent[],start:string,end:
 
 export function loadServiceData(db:DatabaseSync){
  const tables=new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>String(r.name)));
- const exists=(s:string)=>tables.has(s);const meta=Object.fromEntries(db.prepare("SELECT key,value FROM crm_meta WHERE key IN ('publishedAt','attendancePublishedAt','attendanceSync','attendanceRatings')").all().map(r=>[String(r.key),JSON.parse(String(r.value))]));
- const agents:Agent[]=exists('crm_members')?db.prepare('SELECT * FROM crm_members').all().map(r=>({id:r.organization_id+':'+r.id,name:String(r.name),human:r.kind==='OrganizationHumanAgentReferenceModel',active:!!r.active})):[];
+ const rows:Record<string,any[]>={};
+ for(const name of ['crm_meta','crm_members','chats','service_chats','messages','service_events','service_coverage','service_ratings'])rows[name]=tables.has(name)?db.prepare('SELECT * FROM '+name).all():[];
+ return serviceDataFromRows(rows);
+}
+export function serviceDataFromRows(rows:Record<string,any[]>){
+ const exists=(name:string)=>!!rows[name];const meta=Object.fromEntries((rows.crm_meta??[]).map(r=>[String(r.key),JSON.parse(String(r.value))]));
+ const agents:Agent[]=exists('crm_members')?(rows.crm_members??[]).map(r=>({id:r.organization_id+':'+r.id,name:String(r.name),human:r.kind==='OrganizationHumanAgentReferenceModel',active:!!r.active})):[];
  const raw=new Map<string,{raw:any;observedAt:string}>();
- for(const r of db.prepare('SELECT * FROM chats').all())raw.set(r.organization_id+':'+r.id,{raw:JSON.parse(String(r.raw_json)),observedAt:meta.publishedAt});
- if(exists('service_chats'))for(const r of db.prepare('SELECT * FROM service_chats').all())raw.set(r.organization_id+':'+r.id,{raw:JSON.parse(String(r.raw_json)),observedAt:String(r.observed_at)});
+ for(const r of (rows.chats??[]))raw.set(r.organization_id+':'+r.id,{raw:(r.raw??JSON.parse(String(r.raw_json??'{}'))),observedAt:r.observed_at??meta.publishedAt});
+ if(exists('service_chats'))for(const r of (rows.service_chats??[]))raw.set(r.organization_id+':'+r.id,{raw:(r.raw??JSON.parse(String(r.raw_json??'{}'))),observedAt:String(r.observed_at)});
  const chats=new Map<string,ServiceChat>();
  for(const [id,{raw:r,observedAt}] of raw){
   if(r.contact?.contactType!=='DirectMessage'||!finite(observedAt))continue;
@@ -101,22 +106,24 @@ export function loadServiceData(db:DatabaseSync){
   else{const sorted=[...history].filter((h:any)=>finite(h.enteredAt)).sort((a:any,b:any)=>stamp(a.enteredAt)-stamp(b.enteredAt));for(let i=0;i<sorted.length;i++){const h=sorted[i];if(!h.memberId)continue;segments.push({memberId:qualify(h.memberId),start:h.enteredAt,end:sorted[i+1]?.enteredAt??r.closedAtUTC??observedAt,ongoing:!sorted[i+1]&&!!r.open,firstReplyId:h.firstMemberReplyMessage?.id});}}
   chats.set(id,{id,label:r.contact?.name||'Contato sem nome',contactId:qualify(r.contact?.phoneNumber||r.contact?.id||id),open:!!r.open,observedAt,entry:r.firstContactMessage?.eventAtUTC??null,segments,messages:[],events:[],coverage:[]});
  }
- for(const r of db.prepare('SELECT organization_id,chat_id,id,event_at_utc,raw_json FROM messages').iterate()){
-  const chat=chats.get(r.organization_id+':'+r.chat_id);if(!chat)continue;const m=JSON.parse(String(r.raw_json));
+ for(const r of (rows.messages??[])){
+  const chat=chats.get(r.organization_id+':'+r.chat_id);if(!chat)continue;const m=(r.raw??JSON.parse(String(r.raw_json??'{}')));
   chat.messages.push({id:String(r.id),at:String(r.event_at_utc),source:m.source??'',memberId:m.sentByOrganizationMember?.id?r.organization_id+':'+m.sentByOrganizationMember.id:null,private:!!m.isPrivate,valid:!['Failed','Error','Processing','Retrying','Submitted','Deleted','Redacted'].includes(m.messageState)&&!['Reaction','CallAttempt'].includes(m.messageType)&&!m.scheduledMessage&&!m.bulkSendSession});
  }
- if(exists('service_events'))for(const r of db.prepare('SELECT * FROM service_events').iterate()){const m=JSON.parse(String(r.raw_json)),org=String(r.organization_id);chats.get(org+':'+r.chat_id)?.events.push({id:String(r.id),at:String(r.at),kind:String(r.kind),memberId:m.author?.agentId?org+':'+m.author.agentId:undefined,previous:m.previousMemberId?org+':'+m.previousMemberId:undefined,next:m.newMemberId?org+':'+m.newMemberId:undefined});}
- if(exists('service_coverage'))for(const r of db.prepare('SELECT * FROM service_coverage').iterate())chats.get(r.organization_id+':'+r.chat_id)?.coverage.push({start:String(r.start_utc),end:String(r.end_utc)});
- const ratings=exists('service_ratings')?db.prepare('SELECT count(*) AS n FROM service_ratings').get()?.n??0:0;
+ if(exists('service_events'))for(const r of (rows.service_events??[])){const m=(r.raw??JSON.parse(String(r.raw_json??'{}'))),org=String(r.organization_id);chats.get(org+':'+r.chat_id)?.events.push({id:String(r.id),at:String(r.at),kind:String(r.kind),memberId:m.author?.agentId?org+':'+m.author.agentId:undefined,previous:m.previousMemberId?org+':'+m.previousMemberId:undefined,next:m.newMemberId?org+':'+m.newMemberId:undefined});}
+ if(exists('service_coverage'))for(const r of (rows.service_coverage??[]))chats.get(r.organization_id+':'+r.chat_id)?.coverage.push({start:String(r.start_utc),end:String(r.end_utc)});
+ const ratings=exists('service_ratings')?(rows.service_ratings??[]).length:0;
  return {chats:[...chats.values()],agents,meta,ratings:Number(ratings)};
 }
-export function registerAgentPerformance(app:FastifyInstance,db:DatabaseSync,getConfig:()=>AttendanceConfig){
+export function registerAgentPerformance(app:FastifyInstance,db:DatabaseSync|(()=>Promise<ReturnType<typeof loadServiceData>&{version:string}>),getConfig:()=>AttendanceConfig|Promise<AttendanceConfig>,sync?:{status:()=>Promise<any>;request:(period?:Period)=>Promise<any>}){
  let cached:ReturnType<typeof loadServiceData>|undefined,version='';let job:{status:string;startedAt?:string}={status:'idle'};
  const reports=new Map<string,ReturnType<typeof performance>>();
- const read=()=>{const key=JSON.stringify(db.prepare("SELECT key,value FROM crm_meta WHERE key IN ('publishedAt','attendancePublishedAt') ORDER BY key").all());if(!cached||version!==key){db.exec('BEGIN');try{cached=loadServiceData(db);db.exec('COMMIT');version=key;}catch(e){db.exec('ROLLBACK');throw e;}}return cached;};
- app.get<{Querystring:{start:string;end:string}}>('/api/v1/attendance/agents',{schema:{querystring:{type:'object',required:['start','end'],additionalProperties:false,properties:{start:{type:'string',maxLength:10},end:{type:'string',maxLength:10}}}}},async req=>{const d=read(),config=getConfig(),key=JSON.stringify([version,req.query.start,req.query.end,config]);let result=reports.get(key);if(!result){result=performance(d.chats,d.agents,req.query.start,req.query.end,config);reports.set(key,result);if(reports.size>12)reports.delete(reports.keys().next().value!);}return {...result,syncedAt:d.meta.attendancePublishedAt??d.meta.publishedAt,sync:d.meta.attendanceSync??{status:'not-collected'},ratings:{count:d.ratings,collected:!!d.meta.attendanceRatings,partial:d.meta.attendanceRatings?.partial??true}};});
- app.get('/api/v1/attendance/sync',async()=>job);
- app.post('/api/v1/attendance/sync',async(_req,reply)=>{
+ const read=async()=>{if(typeof db==='function'){const d=await db();version=d.version;return d;}const key=JSON.stringify(db.prepare("SELECT key,value FROM crm_meta WHERE key IN ('publishedAt','attendancePublishedAt') ORDER BY key").all());if(!cached||version!==key){db.exec('BEGIN');try{cached=loadServiceData(db);db.exec('COMMIT');version=key;}catch(e){db.exec('ROLLBACK');throw e;}}return cached;};
+ app.get<{Querystring:{start:string;end:string}}>('/api/v1/attendance/agents',{schema:{querystring:{type:'object',required:['start','end'],additionalProperties:false,properties:{start:{type:'string',maxLength:10},end:{type:'string',maxLength:10}}}}},async req=>{const d=await read(),config=await getConfig(),key=JSON.stringify([version,req.query.start,req.query.end,config]);let result=reports.get(key);if(!result){result=performance(d.chats,d.agents,req.query.start,req.query.end,config);reports.set(key,result);if(reports.size>12)reports.delete(reports.keys().next().value!);}return {...result,syncedAt:d.meta.attendancePublishedAt??d.meta.publishedAt,sync:d.meta.attendanceSync??{status:'not-collected'},ratings:{count:d.ratings,collected:!!d.meta.attendanceRatings,partial:d.meta.attendanceRatings?.partial??true}};});
+ app.get('/api/v1/attendance/sync',async()=>sync?sync.status():job);
+ app.post<{Body:Partial<Period>}>('/api/v1/attendance/sync',{schema:{body:{type:'object',additionalProperties:false,properties:{start:{type:'string',maxLength:10},end:{type:'string',maxLength:10}}}}},async(req,reply)=>{
+  if((req.body?.start||req.body?.end)&&!validPeriod(req.body))return reply.code(400).send({message:'Período inválido.'});
+  if(sync)return reply.code(202).send(await sync.request(validPeriod(req.body)?req.body:undefined));
   if(job.status==='running')return reply.code(202).send(job);
   job={status:'running',startedAt:new Date().toISOString()};
   const child=spawn('powershell.exe',['-NoProfile','-File',resolve('scripts/enrich-umbler.ps1'),'-Days','90','-MaxRequests','150'],{cwd:process.cwd(),windowsHide:true,stdio:'ignore'});

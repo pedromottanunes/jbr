@@ -7,7 +7,7 @@ import { buildApp } from './app';
 
 const dirs:string[]=[];
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();for(const dir of dirs.splice(0))rmSync(dir,{recursive:true,force:true});});
-it('serves only persisted records, pages tied timestamps, and blocks nonlocal access and sending',async()=>{
+it('serves analytical metadata without message bodies and blocks nonlocal access and sending',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'jbr-test-'));dirs.push(dir);const path=join(dir,'cache.db');
  const db=new DatabaseSync(path);
  db.exec(`CREATE TABLE crm_meta(key TEXT,value TEXT);CREATE TABLE crm_contacts(id TEXT,label TEXT,phone TEXT,first_inbound_at TEXT,source TEXT);CREATE TABLE crm_chats(id TEXT,contact_id TEXT,label TEXT,at TEXT,is_open INTEGER,message_count INTEGER,limited INTEGER);CREATE TABLE crm_messages(chat_id TEXT,id TEXT,at TEXT,author TEXT,incoming INTEGER,content TEXT,kind TEXT,private INTEGER);
@@ -22,10 +22,13 @@ it('serves only persisted records, pages tied timestamps, and blocks nonlocal ac
   expect((await app.inject('/api/v1/ads')).json().metrics).toBeNull();
   const search=await app.inject('/api/v1/contacts?q=550000');expect(search.json().items).toHaveLength(1);
   expect((await app.inject('/api/v1/contacts?q=%25')).json().items).toHaveLength(0);
-  const first=(await app.inject('/api/v1/conversations/c')).json();expect(first.messages).toHaveLength(100);
-  const second=(await app.inject('/api/v1/conversations/c?before='+first.nextCursor)).json();expect(second.messages).toHaveLength(5);expect(second.nextCursor).toBeNull();
-  expect(new Set([...first.messages,...second.messages].map(m=>m.id)).size).toBe(105);
-  expect((await app.inject('/api/v1/conversations/c?before=bad')).statusCode).toBe(400);
+  for(const suffix of ['','?message=001','?before=old-cursor']){
+   const response=await app.inject('/api/v1/conversations/c'+suffix),data=response.json();
+   expect(response.statusCode).toBe(200);expect(data.chat.contact_id).toBe('p');expect(data.chat.message_count).toBe(105);
+   expect(data.messages).toEqual([]);expect(data.focusMessage).toBeNull();expect(data.nextCursor).toBeNull();
+   expect(response.body).not.toContain('Mensagem de teste');
+  }
+  expect((await app.inject('/api/v1/conversations/missing')).statusCode).toBe(404);
   expect((await app.inject({url:'/api/v1/overview',headers:{host:'attacker.example'}})).statusCode).toBe(403);
   expect((await app.inject({url:'/api/v1/overview',headers:{origin:'https://attacker.example'}})).statusCode).toBe(403);
   expect((await app.inject({method:'POST',url:'/api/v1/conversations/c/messages'})).statusCode).toBe(404);

@@ -1,10 +1,10 @@
 # CRM JBR
 
-CRM para acompanhar aquisição, leads e atendimento da JBR. A aplicação integra dados do Google Ads e leitura de conversas do Umbler Talk, com cache local, identificação dos CTAs do site, indicadores por atendente e controle de saldo estimado. Não envia mensagens pelo WhatsApp.
+CRM para acompanhar aquisição, leads e atendimento da JBR. Integra Google Ads e leitura de conversas do Umbler Talk, com persistência no MongoDB Atlas, identificação dos CTAs do site, indicadores por atendente e orçamento de conta consultado na API. Não envia mensagens pelo WhatsApp.
 
 ## Executar localmente
 
-Requer Node.js 22.12+; os coletores locais usam Python e PowerShell no Windows.
+Requer Node.js da linha 22, versão 22.18 ou superior, e acesso ao Atlas. API, interface e worker usam Node; Python/PowerShell permanecem apenas no legado e no assistente OAuth local.
 
 ```powershell
 npm ci
@@ -12,11 +12,11 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-Abra `http://127.0.0.1:5173`. A configuração inicial usa `APP_MODE=demo`, com uma amostra anonimizada. Para dados reais, siga [Credenciais](CREDENCIAIS.md), [Google OAuth](GOOGLE-OAUTH.md) e [Dados reais](DADOS-REAIS.md), configure `APP_MODE=local` e execute as coletas. Crie `.env` apenas na primeira configuração; preserve seu arquivo existente.
+Abra `http://127.0.0.1:5173`. A configuração inicial usa `APP_MODE=demo`, com uma amostra anonimizada. A instalação JBR já está configurada com `APP_MODE=mongo` e histórico importado em `jbr_crm_dev`. Para outra instalação, siga [MongoDB Atlas](MONGODB.md) e [Google OAuth](GOOGLE-OAUTH.md). Crie `.env` apenas na primeira configuração; preserve seu arquivo existente.
 
 Validação: `npm run check`, `npm run test:collector` e `npm run build`. Os recursos de sábado, desempenho dos atendentes e saldo estão descritos em [Implementação local](IMPLEMENTACAO.md).
 
-O repositório contém código, testes e documentação. Credenciais, bancos, conversas completas, caches e estudos visuais com dados reais permanecem locais e são ignorados pelo Git. A publicação do repositório não publica o CRM na internet. Autenticação de usuários, persistência e adaptação dos coletores para o Render continuam pendentes.
+O repositório contém código, testes e documentação. Credenciais privadas, dumps e estudos com dados reais ficam fora do Git; os dados operacionais ficam no Atlas. A aplicação continua local. Persistência e worker já foram adaptados; autenticação, permissões e ensaio de restauração ainda são necessários para publicar no Render.
 
 O objetivo é acompanhar a jornada entre aquisição, contato pelo WhatsApp, atendimento e resultado comercial. A plataforma reunirá métricas do Google Ads, conversas provenientes do Umbler Talk e cadastro de leads, com identidade visual inspirada em `Land Page Atualizada`.
 
@@ -36,6 +36,8 @@ O objetivo é acompanhar a jornada entre aquisição, contato pelo WhatsApp, ate
 | [Credenciais locais](CREDENCIAIS.md) | Local do MCC, requisitos OAuth e token Umbler protegido. |
 | [Dados reais](DADOS-REAIS.md) | Coleta WhatsApp, cache local, cobertura e testes. |
 | [Autorizar Google Ads](GOOGLE-OAUTH.md) | Configurar o Cloud e executar o assistente OAuth local. |
+| [MongoDB Atlas](MONGODB.md) | Configuração ativa, dados migrados, coleções, comandos e recuperação. |
+| [Revisão da integração](REVISAO-INTEGRACAO.md) | Correções, medições, testes de integridade e pendências para o Render. |
 
 ## Decisões já dadas pelo projeto
 
@@ -49,7 +51,7 @@ O objetivo é acompanhar a jornada entre aquisição, contato pelo WhatsApp, ate
 - Diretriz de interface: área útil limpa, sem subtítulos explicativos permanentes. Os estudos visuais serão simplificados conforme o plano técnico.
 - Desenvolvimento local primeiro; repositório GitHub e deploy no Render posteriormente, com configuração portável desde a fundação.
 
-O plano técnico define React/TypeScript, API Fastify, PostgreSQL e worker com pg-boss como base de implementação. Render é o destino solicitado para a publicação futura; plano contratado e domínio permanecem pendentes. A estratégia de atribuição e as regras operacionais ainda têm pontos a validar. O WhatsApp está definido como exclusivamente de leitura.
+A integração de 24/11/2026 mantém React/TypeScript e API Fastify e usa **MongoDB Atlas**, substituindo PostgreSQL/pg-boss. Histórico, configurações, credenciais protegidas e tarefas foram migrados. `npm run dev` inicia também o worker; coletas automáticas continuam desligadas e os botões de atualização usam a fila persistente. Estado e operação em [MongoDB Atlas](MONGODB.md).
 
 ## Ponto central
 

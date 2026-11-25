@@ -1,7 +1,8 @@
-import { ReadGate } from './read-transport.js';
+import { ReadGate, ProviderReadError } from './read-transport.js';
+import type { GoogleTokenProvider } from './google-oauth.js';
 
 function numericId(value: string): string {
-  const id = value.replace(/-/g, '');
+  const id = value.replace(/-/g, '').trim();
   if (!/^\d{10}$/.test(id)) throw new Error('ID de conta Google Ads inválido.');
   return id;
 }
@@ -19,13 +20,14 @@ export function campaignDailyQuery(from: string, to: string): string {
 }
 
 export class GoogleAdsReader {
-  constructor(private readonly options: { accessToken: string; developerToken?: string; version: string; loginCustomerId?: string }, private readonly gate: ReadGate = new ReadGate(1_000)) {}
+  constructor(private readonly options: { accessToken?: string; tokenProvider?:GoogleTokenProvider; developerToken?: string; version: string; loginCustomerId?: string }, private readonly gate: ReadGate = new ReadGate(1_000), private readonly wait:(ms:number)=>Promise<void>=ms=>new Promise(resolve=>setTimeout(resolve,ms))) {}
 
   async campaigns(customerId: string, from: string, to: string): Promise<unknown> {
     return this.query(customerId, campaignDailyQuery(from, to));
   }
 
   account(customerId:string) { return this.query(customerId, 'SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone FROM customer LIMIT 1'); }
+  accountBudgets(customerId:string) {return this.query(customerId,accountBudgetQuery);}
   conversionActions(customerId:string) { return this.query(customerId, 'SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.type, conversion_action.category, conversion_action.primary_for_goal FROM conversion_action'); }
   report(customerId:string,kind:GoogleReport,from:string,to:string) {return this.query(customerId,reportQuery(kind,from,to));}
   dailyConversions(customerId:string,from:string,to:string) {
@@ -35,13 +37,27 @@ export class GoogleAdsReader {
   private async query(customerId:string,query:string):Promise<unknown> {
     if (!/^v\d+$/.test(this.options.version)) throw new Error('Versão Google Ads inválida.');
     const id = numericId(customerId);
-    const headers: Record<string, string> = { Authorization: `Bearer ${this.options.accessToken}`, 'Content-Type': 'application/json' };
+    let token=this.options.tokenProvider?await this.options.tokenProvider.get():this.options.accessToken??'';
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     if (this.options.developerToken) headers['developer-token'] = this.options.developerToken;
     if (this.options.loginCustomerId) headers['login-customer-id'] = numericId(this.options.loginCustomerId);
     const url = new URL(`https://googleads.googleapis.com/${this.options.version}/customers/${id}/googleAds:searchStream`);
-    return this.gate.send(url, { method: 'POST', headers, body: JSON.stringify({ query }) }, this.options.accessToken);
+    let refreshed=false,retries=0;
+    while(true){
+      try{return await this.gate.send(url, { method: 'POST', headers, body: JSON.stringify({ query }) }, token);}
+      catch(e){
+        if(e instanceof ProviderReadError&&e.status===401&&!refreshed&&this.options.tokenProvider){refreshed=true;token=await this.options.tokenProvider.get(true,token);headers.Authorization=`Bearer ${token}`;continue;}
+        const temporary=e instanceof ProviderReadError?(e.status===429||e.status>=500):e instanceof Error&&['TimeoutError','AbortError','TypeError'].includes(e.name);
+        if(!temporary||retries>=2)throw e;
+        const delay=Math.max(e instanceof ProviderReadError?e.retryAfterMs:0,1000*2**retries);
+        if(delay>30000)throw e;
+        retries++;await this.wait(delay);
+      }
+    }
   }
 }
+
+export const accountBudgetQuery=`SELECT customer.id, customer.currency_code, customer.time_zone, account_budget.id, account_budget.status, account_budget.approved_start_date_time, account_budget.proposed_start_date_time, account_budget.approved_end_date_time, account_budget.approved_end_time_type, account_budget.adjusted_spending_limit_micros, account_budget.adjusted_spending_limit_type, account_budget.amount_served_micros FROM account_budget WHERE account_budget.status = 'APPROVED'`;
 
 export const reportFields={
  campaigns:['campaign','campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.optimization_score, campaign_budget.amount_micros, metrics.search_impression_share'],

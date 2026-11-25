@@ -10,16 +10,15 @@ export type Campaign = { id: string; name: string; clicks: number; spend: number
 export type Ads = { period: string; campaigns: Campaign[]; termCoverage: { clicks: number; percent: number } };
 export type Contact = { id: string; label: string; firstInboundAt: string; source: string; category: string; qualified: boolean; proposal: boolean; replied: boolean; conversationId: string | null };
 export type ContactPage = { items: Contact[]; nextCursor: string | null; totalInSample: number };
-export type Conversation = { contactId: string; contactLabel: string; date: string; messages: { at: string; author: string; text: string }[] };
 
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, { signal, credentials: 'same-origin' });
+  const response = await fetch(`/api/v1${path}`, { signal:AbortSignal.any([AbortSignal.timeout(30000),...(signal?[signal]:[])]), credentials: 'same-origin' });
   if (!response.ok) throw new Error(`Falha ao carregar dados (${response.status}).`);
   return response.json() as Promise<T>;
 }
 
 export async function sendJson<T>(path:string,method:'POST'|'PUT',body:unknown):Promise<T>{
- const response=await fetch('/api/v1'+path,{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const response=await fetch('/api/v1'+path,{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
  const data=await response.json();if(!response.ok)throw new Error(data.message??'Não foi possível salvar.');return data as T;
 }
 

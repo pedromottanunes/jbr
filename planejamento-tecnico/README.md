@@ -1,6 +1,6 @@
 # Planejamento técnico do CRM JBR
 
-Plano de implementação de 21/11/2026. Define a base para trabalhar localmente e, depois, levar somente este projeto para um repositório GitHub e para o Render. Não cria aplicação, infraestrutura, banco ou conexão autenticada nesta etapa.
+Plano iniciado em 21/11/2026, atualizado em 24/11/2026: a aplicação local e o repositório já existem. **MongoDB Atlas substitui a proposta PostgreSQL/pg-boss.** O inventário, a configuração e a sequência de migração vigentes estão em [MongoDB Atlas](../MONGODB.md). Os documentos anteriores permanecem como referência de requisitos; escolhas de SQL/Drizzle/pg-boss não se aplicam à nova persistência.
 
 ## Diretrizes confirmadas
 
@@ -12,15 +12,15 @@ Plano de implementação de 21/11/2026. Define a base para trabalhar localmente 
 
 ## Decisão de arquitetura
 
-Adotar **React + TypeScript + Vite** na interface, **Node.js + Fastify** na API, **PostgreSQL** como banco e **pg-boss** como fila persistente. Um único repositório, com API e worker separados. O worker é o processo que sincroniza os provedores e atualiza os dados; a interface consulta o banco por meio da API interna.
+Adotar **React + TypeScript + Vite** na interface, **Node.js + Fastify** na API e **MongoDB Atlas**, com driver oficial e tarefas persistidas no banco. Um único repositório, com API e worker separados. O worker sincroniza os provedores e atualiza os dados; a interface consulta o banco por meio da API interna.
 
-É um monólito modular com dois processos, não um conjunto de microsserviços. A escolha de pg-boss permite usar o PostgreSQL também para tarefas sem introduzir Redis no primeiro escopo. A biblioteca fornece fila sobre Postgres; a idempotência das regras do CRM continua sendo responsabilidade da aplicação. [Projeto oficial pg-boss](https://github.com/timgit/pg-boss).
+É um monólito modular com API e worker separados. Jobs, cursores, leases e limites ficam no MongoDB com índices únicos e operações atômicas. A migração foi executada: painéis e sincronizações usam Atlas; SQLite/JSON permanecem como backup histórico. O estado validado está em [MONGODB.md](../MONGODB.md).
 
 ```mermaid
 flowchart LR
     U[Usuário] --> UI[React]
     UI --> API[API Fastify]
-    API --> DB[(PostgreSQL)]
+    API --> DB[(MongoDB Atlas)]
     API --> O[Pedido de sincronização]
     O --> DB
     DB --> W[Worker e fila]
@@ -35,6 +35,7 @@ Abertura de telas, filtros e atualização da interface **não iniciam coleta ex
 
 | Documento | Decisões que contém |
 | --- | --- |
+| [MongoDB Atlas — plano vigente](../MONGODB.md) | Diagnóstico atual, organização/projeto/cluster, coleções, migração e critérios de troca. |
 | [Arquitetura e estrutura](01-arquitetura.md) | Stack, módulos, estrutura futura e contratos entre processos. |
 | [Interface limpa](02-interface.md) | Layout, comportamento de cada tela, cache e atualização. |
 | [Sincronização e duplicidade](03-sincronizacao.md) | Fila, chaves, travas, limites, retomada e reconciliação. |

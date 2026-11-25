@@ -1,5 +1,7 @@
 # Sequência de implementação e critérios de aceite
 
+> Atualização de 24/11/2026: a aplicação local e o repositório GitHub já existem. A sequência vigente para substituir SQLite/JSON e a proposta PostgreSQL por MongoDB Atlas está no [plano de migração](../MONGODB.md). Os cenários de integridade e leitura dos provedores abaixo continuam referências de aceite.
+
 ## Entregas em ordem
 
 | Etapa | Trabalho | Condição para avançar |

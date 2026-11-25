@@ -1,5 +1,11 @@
 # Implementação local do CRM JBR
 
+## Banco de dados — decisão de 24/11/2026
+
+MongoDB Atlas está integrado e ativo em `APP_MODE=mongo`. Foram migrados contatos, conversas, mensagens, relatórios Google, atendimento, configurações e progresso. `npm run dev` inicia API, interface e worker Node; atualizações gravam no Atlas e a agenda automática permanece desativada. O backup local foi preservado. Consulte [MONGODB.md](MONGODB.md) para coleções, credenciais protegidas, importação, testes e recuperação.
+
+As descrições de SQLite, DPAPI e worker no processo da API abaixo registram a implementação anterior. No modo Mongo, configurações, snapshots, filas, limites e tokens criptografados são persistidos no Atlas, e o worker é um processo separado. A autenticação para publicação pública continua pendente.
+
 ## Atendimento e saldo — 24/11/2026
 
 Em **Conversas → Indicadores**, o horário de entrada usa cinco grupos sem sobreposição: semana dentro e fora do expediente, sábado dentro e fora do expediente, e domingo. Cada grupo informa leads com CTA, conversas e respostas observadas. A regra de sábado é 8h–13h; segunda a sexta permanece 8h–18h, no fuso `America/Sao_Paulo`.
@@ -19,27 +25,39 @@ Regras de medição:
 
 **Atualizar atendimentos / Continuar coleta** executa o enriquecimento local em lotes de até 150 chamadas, intervalo mínimo de 3 segundos, com os mesmos locks e tratamento de limite de API do coletor existente. A descoberta percorre conversas criadas nos últimos 90 dias e conversas abertas mais antigas. Históricos são retomados por cursor, com IDs únicos e cobertura armazenada. Dados anteriores permanecem disponíveis durante a coleta. A conclusão de um lote não garante histórico completo: o painel mostra a cobertura observada.
 
-Execução manual equivalente, em Windows:
+Execução manual atual:
 
 ```powershell
 npm run sync:attendance
 # Janela opcional de até 366 dias, com orçamento explícito:
-powershell -NoProfile -File scripts/enrich-umbler.ps1 -Days 180 -MaxRequests 150
+npm run sync:attendance -- --days 180 --max-requests 150
 ```
 
-No **Tráfego pago → Saldo e recargas**, informe o saldo confirmado agora no Google Ads e, depois, as recargas realizadas. O CRM calcula uma estimativa pelo consumo coletado, com referência em centavos, gastos em micros, idempotência do registro e histórico das confirmações. Uma nova confirmação substitui a referência de cálculo. Os alertas também aparecem na Visão geral quando exigem atenção.
+### Orçamento da conta Google Ads — substitui o controle manual anterior
 
-O saldo pré-pago oficial não é disponibilizado por esse conector da Google Ads API. Portanto, este recurso não consulta caixa, não efetua recargas e não representa um saldo bancário oficial. A estimativa exige gastos cobrindo a confirmação até hoje. Dados com mais de 2 horas ou referência com mais de 7 dias pedem conferência, sem status de saldo seguro. A projeção usa os últimos 7 dias completos; atraso de métricas, tributos, créditos e ajustes podem gerar diferenças. Limites iniciais editáveis: R$ 200, atenção em 3 dias e crítico em 1 dia. Nenhum valor financeiro foi inventado para configurar a conta.
+Em **Tráfego pago → Ver orçamento**, o CRM consulta `account_budget` aprovado e vigente. Calcula `max(0, adjusted_spending_limit_micros - amount_served_micros)` com `BigInt` e transmite valores decimais exatos. Não desconta novamente os custos de campanhas. Não há formulário de saldo ou recarga manual: as rotas antigas de lançamentos foram removidas; registros legados locais são preservados, mas não alimentam o novo cálculo.
 
-Persistência: conversas, atendentes, eventos e progresso em `local-data/umbler.sqlite3`; horários e registros de saldo em `local-data/crm-settings.sqlite3`; gastos em `local-data/google-ads.json`. Esses arquivos ficam fora do Git. O servidor web lê a base Umbler; o coletor é o responsável pelas escritas. As rotas locais de configuração exigem as mesmas proteções de loopback/origem do restante do CRM. Esta entrega ainda não habilita publicação ou autenticação no Render.
+A vigência é avaliada a cada leitura no fuso da conta, usando início aprovado ou proposto e término exclusivo; `FOREVER` representa ausência de término. Conta divergente, resposta malformada e números imprecisos são bloqueados. Sem orçamento utilizável, limite/consumo ausentes ou mais de um vigente, o estado é **indisponível**. `INFINITE` produz **ilimitado**, sem valor inventado. Os demais estados são disponível, consultando e erro. A última leitura válida é preservada como referência histórica após falhas ou informações incompletas.
 
-Rotas novas: `GET/PUT /api/v1/attendance/config`, `GET /api/v1/attendance/agents`, `GET/POST /api/v1/attendance/sync`, `GET /api/v1/ads/balance`, `PUT /api/v1/ads/balance/limits`, `POST /api/v1/ads/balance/entries`. `POST /api/v1/ads/sync` aceita `refresh: true` para atualizar custos já cobertos no cache. As páginas consultam o cache local; a coleta externa só ocorre por ação explícita ou pelas rotinas existentes.
+Este recurso representa orçamento de conta durante uma vigência; não é orçamento diário nem saldo financeiro pré-pago. A documentação vincula a gestão de faturamento por API à configuração de faturamento mensal. A disponibilidade é verificada pela resposta real, sem inferir o regime financeiro da conta. Versão padrão `v26`, configurável em `GOOGLE_ADS_API_VERSION`, verificada em suporte em 24/11/2026. Os campos GAQL estão disponíveis nessa versão. O developer token é enviado quando configurado; o projeto Google Cloud também precisa ter acesso de produção conforme as regras atuais.
 
-Validação: `npm run check`, `npm run test:collector` e `npm run build`. Os testes cobrem limites de horário, sábado e vigência, transferência e fila, respostas sem cobertura, exclusão de automações, saldo/recargas idempotentes, períodos de custo incompletos e retomada da coleta sem misturar eventos com mensagens.
+Um worker assíncrono no processo da API executa a consulta inicial e verifica atualizações a cada minuto, respeitando **15 minutos por conta**. Atualização manual tem intervalo mínimo de **30 segundos** e responde `202` quando inicia ou encontra trabalho em andamento. Há um trabalhador para o vínculo local JBR; leases SQLite com dono e prazo de 10 minutos coordenam várias instâncias que compartilhem o mesmo banco. Nenhuma transação permanece aberta aguardando o Google. `GET` só lê o snapshot e os custos locais, sem chamar o provedor.
 
-Fontes consultadas: [OpenAPI Umbler Talk](https://app-utalk.umbler.com/api/docs/index.html) e [esclarecimento da equipe Google Ads sobre saldo restante na API](https://groups.google.com/g/adwords-api/c/KxTS_HYqSyA).
+Snapshots e limites são separados por ambiente, cliente e conta. O vínculo é fixado no backend; parâmetros de conta/cliente enviados pela interface são rejeitados. O modo local mantém a restrição de loopback/origem e recusa execução pública/produção. A publicação futura exigirá autenticação de usuários, vínculo autorizado por tenant, persistência compartilhada e adaptação da proteção de credenciais; esses controles locais não substituem autorização multiusuário no Render.
 
-## Registro das entregas anteriores
+O access token é reutilizado, renovado perto da expiração e salvo protegido por DPAPI no cache local. Há single-flight no processo e lease para a renovação entre instâncias. HTTP 401 provoca uma renovação e uma repetição; 403 não é repetido; 429 respeita `Retry-After`; falhas temporárias têm retry limitado. Respostas sensíveis e credenciais não são entregues à interface. A autorização usa `state` vinculado ao cookie da sessão local, PKCE e validade de cinco minutos; uma reconexão sem refresh token não apaga o anterior.
+
+Alertas configuráveis por vínculo: **urgente até R$ 100 ou 2 dias**, **atenção até R$ 500 ou 5 dias**, **esgotado quando o restante é zero**. Os limiares monetários usam a moeda da conta. Previsão usa apenas sete dias completos com cobertura, moeda, conta e atualização de custos verificadas; média zero não gera duração. Leitura com mais de uma hora suspende alertas e previsão, exibindo desatualização. Nenhum alerta afirma necessidade de recarga ou garante quando os anúncios pararão.
+
+Persistência: conversas, atendentes, eventos e progresso em `local-data/umbler.sqlite3`; horários, snapshots de orçamento, leases, limites e cache OAuth criptografado em `local-data/crm-settings.sqlite3`; gastos em `local-data/google-ads.json`. Arquivos locais ficam fora do Git. A chave DPAPI é gerenciada pelo Windows, separada do banco.
+
+Rotas: `GET/PUT /api/v1/attendance/config`, `GET /api/v1/attendance/agents`, `GET/POST /api/v1/attendance/sync`, `GET /api/v1/ads/balance`, `POST /api/v1/ads/balance/sync`, `PUT /api/v1/ads/balance/limits`. `POST /api/v1/ads/sync` permanece dedicado aos relatórios de tráfego. Os alertas de orçamento também aparecem na Visão geral.
+
+Validação: `npm run check`, `npm run test:collector` e `npm run build`. Testes de orçamento cobrem valores grandes e zero, infinito, campos ausentes, datas passadas/futuras, vigência ambígua, fuso/moeda, custos desatualizados, 401/403/429/5xx/timeout, leases entre conexões, token compartilhado, isolamento, throttling e preservação da última leitura. A conta JBR foi consultada com as credenciais locais; a comparação visual com a tela de faturamento do Google depende de acesso ao navegador.
+
+Fontes: [Umbler Talk](https://app-utalk.umbler.com/api/docs/index.html), [faturamento Google Ads](https://developers.google.com/google-ads/api/docs/billing/overview), [orçamentos de conta](https://developers.google.com/google-ads/api/docs/billing/account-budgets), [campos v26](https://developers.google.com/google-ads/api/fields/v26/account_budget) e [versões em suporte](https://developers.google.com/google-ads/api/docs/sunset-dates).
+
+## Registro histórico das entregas anteriores (não é o procedimento atual)
 
 **Visão geral atual:** o dashboard de funil e rastro já usa a base real local. Consulte [FUNIL.md](FUNIL.md) para regras, filtros, cobertura e etapas comerciais ainda pendentes.
 

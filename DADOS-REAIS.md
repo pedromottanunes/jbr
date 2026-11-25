@@ -1,5 +1,7 @@
 # Dados reais no ambiente local
 
+> Atualização de 24/11/2026: o CRM agora usa `APP_MODE=mongo`, com histórico importado e coletas pelo worker Node. Operação atual em [MONGODB.md](MONGODB.md). As seções SQLite/Python abaixo documentam o legado preservado para referência; não executar os coletores antigos junto do worker Atlas.
+
 ## Visão geral
 
 O dashboard agora apresenta o funil e o rastro dos leads. Regras e limitações em [FUNIL.md](FUNIL.md). A identidade do cadastro continua sendo o ID Umbler; apenas a contagem da visão geral agrupa telefones completos iguais dentro da mesma organização, sem modificar os cadastros.

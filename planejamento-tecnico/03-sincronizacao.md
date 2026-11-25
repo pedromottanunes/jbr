@@ -1,5 +1,7 @@
 # Sincronização sem duplicidade de resultados
 
+> Atualização de 24/11/2026: o destino de jobs, cursores, leases e limites passa a ser MongoDB Atlas. Referências a PostgreSQL/pg-boss neste plano inicial são históricas. As garantias de idempotência continuam exigidas; a adaptação e a transição dos coletores estão no [plano MongoDB](../MONGODB.md).
+
 ## Responsabilidade única pela coleta
 
 Somente o worker chama os endpoints de dados dos provedores. Todas as chamadas passam por um transporte comum que valida destino, método, limites, timeout e orçamento. A API web pode executar apenas operações administrativas de autenticação explicitamente autorizadas; não coleta dados ao abrir telas.

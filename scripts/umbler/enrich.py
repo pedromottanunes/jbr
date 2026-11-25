@@ -112,6 +112,7 @@ def run(db,client,org,days):
         progress('error');raise
 
 def main():
+    c.require_legacy_mode()
     parser=argparse.ArgumentParser();parser.add_argument('--days',type=int,default=90);parser.add_argument('--max-requests',type=int,default=150);args=parser.parse_args()
     if not 1<=args.days<=366:parser.error('Período deve ter até 366 dias.')
     with c.single_process_lock(sync.DB),closing(c.connect_db(sync.DB)) as db:

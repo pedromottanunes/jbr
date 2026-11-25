@@ -57,16 +57,8 @@ export function registerLocalData(app: FastifyInstance, databasePath = resolve('
     return {items,total,nextCursor:cursor+limit<total?cursor+limit:null};
   });
   app.get<{Params:{id:string};Querystring:{before?:string;message?:string}}>('/api/v1/conversations/:id', {schema:{params:{type:'object',required:['id'],properties:{id:{type:'string',maxLength:200}}},querystring:{type:'object',additionalProperties:false,properties:{before:{type:'string',maxLength:500},message:{type:'string',maxLength:200}}}}}, async (request,reply) => {
-    const chat=statement('SELECT c.*,p.phone,p.source FROM crm_chats c JOIN crm_contacts p ON p.id=c.contact_id WHERE c.id=?').get(request.params.id);
+    const chat=statement('SELECT c.id,c.contact_id,c.label,c.at,c.is_open,c.message_count,c.limited,p.phone,p.source FROM crm_chats c JOIN crm_contacts p ON p.id=c.contact_id WHERE c.id=?').get(request.params.id);
     if(!chat) return reply.code(404).send({message:'Conversa não encontrada.'});
-    let before: [string,string]|undefined;
-    if(request.query.before) {
-      try { const parsed=JSON.parse(Buffer.from(request.query.before,'base64url').toString()); if(!Array.isArray(parsed)||parsed.length!==2||!parsed.every(x=>typeof x==='string')) throw new Error(); before=[parsed[0],parsed[1]]; }
-      catch { return reply.code(400).send({message:'Cursor inválido.'}); }
-    }
-    const rows= before ? statement('SELECT * FROM crm_messages WHERE chat_id=? AND (at<? OR (at=? AND id<?)) ORDER BY at DESC,id DESC LIMIT 101').all(chat.id!,before[0],before[0],before[1]) : statement('SELECT * FROM crm_messages WHERE chat_id=? ORDER BY at DESC,id DESC LIMIT 101').all(chat.id!);
-    const hasMore=rows.length>100; const messages=rows.slice(0,100); const last=messages.at(-1);
-    const focusMessage=request.query.message?statement('SELECT * FROM crm_messages WHERE chat_id=? AND id=? AND private=0').get(chat.id!,request.query.message)??null:null;
-    return {chat,focusMessage,messages:messages.reverse(),nextCursor:hasMore&&last?Buffer.from(JSON.stringify([last.at,last.id])).toString('base64url'):null};
+    return {chat,contentStorageEnabled:false,focusMessage:null,messages:[],nextCursor:null};
   });
 }

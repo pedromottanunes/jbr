@@ -1,6 +1,13 @@
 #requires -Version 5.1
 param([ValidateRange(1,1000)][int]$MaxRequests=150,[ValidateRange(1,90)][int]$Days=7)
 $ErrorActionPreference='Stop'
+
+$taskConfigPath=Join-Path $PSScriptRoot '../.env'
+if ((Test-Path -LiteralPath $taskConfigPath) -and (Get-Content -LiteralPath $taskConfigPath | Select-String -Pattern '^APP_MODE=mongo\s*$' -Quiet)) {
+    Write-Host 'Coletor SQLite desativado no modo Atlas. Use npm run sync:google ou npm run sync:attendance.'
+    exit 1
+}
+
 $secure=$null
 $resultCode=1
 try {

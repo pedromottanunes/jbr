@@ -6,6 +6,7 @@ import { GoogleAdsReader, reportFields, type GoogleReport } from '../src/server/
 import { periodChunks,validPeriod } from '../src/shared/period.js';
 
 async function main() {
+ if(process.env.APP_MODE==='mongo')throw new Error('Coletor legado desativado: execute npm run sync:google.');
  const {GOOGLE_ADS_CLIENT_ID:clientId,GOOGLE_ADS_CLIENT_SECRET:clientSecret,GOOGLE_ADS_CUSTOMER_ID:customerId,GOOGLE_ADS_LOGIN_CUSTOMER_ID:manager,JBR_GOOGLE_REFRESH_TOKEN:refreshToken}=process.env;
  if(!clientId||!clientSecret||!customerId||!manager||!refreshToken) throw new Error('Configuração Google incompleta.');
  const auth=new OAuth2Client({clientId,clientSecret}); auth.setCredentials({refresh_token:refreshToken});

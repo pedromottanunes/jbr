@@ -71,7 +71,7 @@ it('filters and pages the cohort without changing its totals or double-counting 
  expect(summarize(leads,ads,{...filters,q:'Cliente 99999'},null).total).toBe(0);
 });
 
-it('serves a coherent local snapshot, invalidates after publication, and scopes message links to their conversation',async()=>{
+it('serves a coherent analytical snapshot, invalidates after publication and omits message contents',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'jbr-funnel-'));const path=join(dir,'cache.db');const db=new DatabaseSync(path);
  db.exec(`PRAGMA journal_mode=WAL;
  CREATE TABLE crm_meta(key TEXT PRIMARY KEY,value TEXT);
@@ -93,7 +93,9 @@ it('serves a coherent local snapshot, invalidates after publication, and scopes 
   expect((await app.inject(url)).json().items).toHaveLength(1);
   db.exec(`BEGIN;INSERT INTO crm_messages VALUES('o:c','reply','2026-11-20T11:00:00Z','Equipe',0,'Resposta','Text',0);INSERT INTO messages VALUES('o','c','reply','2026-11-20T11:00:00Z','{"source":"Member"}');UPDATE crm_meta SET value='"2026-11-20T21:00:00Z"' WHERE key='publishedAt';COMMIT;`);
   expect((await app.inject(url)).json().metrics.attended).toBe(1);
-  const focused=(await app.inject('/api/v1/conversations/o:c?message=first')).json();expect(focused.focusMessage.content).toBe('Oi');
+  const focused=(await app.inject('/api/v1/conversations/o:c?message=first')).json();expect(focused.focusMessage).toBeNull();expect(focused.messages).toEqual([]);expect(focused.chat.contact_id).toBe('o:p');
+  const evidence=(await app.inject(url)).json().items[0].evidence;
+  expect(evidence.map((e:{text:string})=>e.text)).toEqual(['Primeira entrada conhecida','Mensagem recebida','Resposta humana registrada']);
   expect((await app.inject('/api/v1/conversations/o:c?message=private')).json().focusMessage).toBeNull();
   expect((await app.inject('/api/v1/conversations/o:c?message=missing')).json().focusMessage).toBeNull();
   expect((await app.inject('/api/v1/funnel?start=2026-02-30')).statusCode).toBe(400);

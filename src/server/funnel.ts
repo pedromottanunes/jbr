@@ -1,12 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
-import {normalize,matchCta} from './cta.js';
+import {normalize,ctaRecordFor} from './cta.js';
 import type { Evidence, FunnelLead, FunnelResult, Origin, Stage, ObservedTag } from '../shared/funnel.js';
 import {defaultPeriod} from '../shared/period.js';
 
 export {normalize} from './cta.js';
 type Contact={id:string;label:string;phone:string|null;first_inbound_at:string|null;source:string;tags?:ObservedTag[]};
-type Message={contactId:string;chatId:string;id:string;at:string;incoming:number;content:string;source:string|null};
+type Message={contactId:string;chatId:string;id:string;at:string;incoming:number;content?:string;ctaKey?:string|null;source:string|null};
 type RecordLead={id:string;label:string;phone:string|null;enteredAt:string|null;googleTag:boolean;messages:Message[];tags:ObservedTag[]};
 type AdsCache={connected?:boolean;period?:{start:string;end:string};syncedAt?:string;timezone?:string;currency?:string;daily?:{date:string;clicks:number;impressions:number;spend:number}[];conversionDaily?:{date:string;action:string;value:number}[];actions?:{resourceName:string;name:string;status:string;type?:string;category?:string}[]};
 export type Filters={start?:string;end?:string;action?:string;origin?:Origin|'all';stage?:Stage;q?:string;cursor?:number;limit?:number};
@@ -49,14 +49,14 @@ export function summarize(leads:RecordLead[],ads:AdsCache,filters:Filters,publis
   if(!inPeriod(enteredDay)){if(enteredDay<start&&lead.messages.some(m=>m.incoming&&inPeriod(day(m.at))))returning++;continue;}
   const incoming=lead.messages.find(m=>m.incoming&&day(m.at)<=end);
   const firstMessageKnown=!!incoming&&Math.abs(Date.parse(incoming.at)-Date.parse(lead.enteredAt))<1000;
-  const match=incoming?matchCta(incoming.content):undefined;
+  const match=incoming?ctaRecordFor(incoming)?.sources:undefined;
   const origin:Origin=firstMessageKnown&&match?'site':lead.googleTag?'google':'unknown';
   // A response must follow an inbound message in the same chat; bots and External are excluded.
   const chatInbounds=new Map<string,string>();let reply:Message|undefined;
   for(const m of lead.messages){if(day(m.at)>end)continue;if(m.incoming){if(!chatInbounds.has(m.chatId))chatInbounds.set(m.chatId,m.at);}else if(m.source==='Member'&&chatInbounds.has(m.chatId)&&m.at>=chatInbounds.get(m.chatId)!){reply=m;break;}}
   const evidence:Evidence[]=[{at:lead.enteredAt,kind:'entry',text:'Primeira entrada conhecida'}];
-  if(incoming)evidence.push({at:incoming.at,kind:'message',text:incoming.content,chatId:incoming.chatId,messageId:incoming.id,...(match?{sources:match}:{})});
-  if(reply)evidence.push({at:reply.at,kind:'reply',text:reply.content,chatId:reply.chatId,messageId:reply.id});
+  if(incoming)evidence.push({at:incoming.at,kind:'message',text:match?'CTA do site reconhecido':'Mensagem recebida',contentStored:false,chatId:incoming.chatId,messageId:incoming.id,...(match?{sources:match}:{})});
+  if(reply)evidence.push({at:reply.at,kind:'reply',text:'Resposta humana registrada',contentStored:false,chatId:reply.chatId,messageId:reply.id});
   items.push({id:lead.id,label:lead.label,phone:lead.phone,enteredAt:lead.enteredAt,origin,googleTag:lead.googleTag,attended:!!reply,firstMessageKnown,evidence,tags:lead.tags.sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))});
  }
  const actions=(ads.actions??[]).map(a=>({id:a.resourceName,name:a.name,status:a.status}));
@@ -77,10 +77,19 @@ export function summarize(leads:RecordLead[],ads:AdsCache,filters:Filters,publis
   ads:{available,spend:available?adsTotals.spend:null,clicks:available?adsTotals.clicks:null,impressions:available?adsTotals.impressions:null,conversions,action,currency:ads.currency??'BRL',actions},origins,items:filtered.slice(cursor,cursor+limit),total:filtered.length,nextCursor:cursor+limit<filtered.length?cursor+limit:null};
 }
 
-export function registerFunnel(app:FastifyInstance,db:DatabaseSync,readAds:()=>Promise<AdsCache>){
+export function registerFunnel(app:FastifyInstance,db:DatabaseSync|(()=>Promise<{leads:ReturnType<typeof groupLeads>;publishedAt:string|null}>),readAds:()=>Promise<AdsCache>){
  let cache:RecordLead[]|undefined,version:string|null=null,publishedAt:string|null=null;
+ let mongoLeads:RecordLead[]|undefined,mongoAds:AdsCache|undefined,mongoPublished:string|null=null;
+ const reports=new Map<string,FunnelResult>();
  const schema={type:'object',additionalProperties:false,properties:{start:{type:'string',pattern:'^\\d{4}-\\d{2}-\\d{2}$'},end:{type:'string',pattern:'^\\d{4}-\\d{2}-\\d{2}$'},action:{type:'string',maxLength:200},origin:{type:'string',enum:['all','site','google','unknown']},stage:{type:'string',enum:['all','attended','unanswered']},q:{type:'string',maxLength:100},cursor:{type:'integer',minimum:0,maximum:1000000},limit:{type:'integer',minimum:1,maximum:50}}};
  app.get<{Querystring:Filters}>('/api/v1/funnel',{schema:{querystring:schema}},async request=>{
+  if(typeof db==='function'){
+   const [d,ads]=await Promise.all([db(),readAds()]);
+   if(mongoLeads!==d.leads||mongoPublished!==d.publishedAt||mongoAds?.daily!==ads.daily||mongoAds?.conversionDaily!==ads.conversionDaily||mongoAds?.actions!==ads.actions||mongoAds?.syncedAt!==ads.syncedAt){reports.clear();mongoLeads=d.leads;mongoAds=ads;mongoPublished=d.publishedAt;}
+   const key=JSON.stringify(request.query);let result=reports.get(key);
+   if(!result){result=summarize(d.leads,ads,request.query,d.publishedAt);reports.set(key,result);if(reports.size>12)reports.delete(reports.keys().next().value!);}
+   return result;
+  }
   const current=String(db.prepare("SELECT value FROM crm_meta WHERE key='publishedAt'").get()?.value??'');
   if(!cache||current!==version){
    db.exec('BEGIN');
@@ -97,10 +106,11 @@ export function registerFunnel(app:FastifyInstance,db:DatabaseSync,readAds:()=>P
       }
      }
     }
-    const messages=db.prepare(`SELECT c.contact_id AS contactId,m.chat_id AS chatId,m.id,m.at,m.incoming,m.content,json_extract(r.raw_json,'$.source') AS source
+    const messages=db.prepare(`SELECT c.contact_id AS contactId,m.chat_id AS chatId,m.id,m.at,m.incoming,m.content,json_extract(r.raw_json,'$.source') AS source,json_extract(r.raw_json,'$.ctaKey') AS ctaKey
      FROM crm_messages m JOIN crm_chats c ON c.id=m.chat_id
      LEFT JOIN messages r ON r.organization_id=substr(m.chat_id,1,instr(m.chat_id,':')-1) AND r.chat_id=substr(m.chat_id,instr(m.chat_id,':')+1) AND r.id=m.id
      WHERE m.private=0`).all() as Message[];
+    for(const m of messages){if(m.ctaKey===null)delete m.ctaKey;if(m.content==='')delete m.content;}
     const published=db.prepare("SELECT value FROM crm_meta WHERE key='publishedAt'").get();
     publishedAt=published?JSON.parse(String(published.value)):null;
     cache=groupLeads(contacts,messages);db.exec('COMMIT');version=current;

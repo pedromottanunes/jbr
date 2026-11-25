@@ -1,5 +1,7 @@
 # Arquitetura e estrutura do código
 
+> Atualização de 24/11/2026: as escolhas de PostgreSQL, Drizzle, pg-boss e a estrutura futura abaixo são do plano inicial. O projeto real usa `src/server` e `src/web`; a nova persistência será MongoDB Atlas com driver oficial. Consulte o [plano vigente e o inventário](../MONGODB.md) antes de implementar.
+
 ## Stack definida para implementação
 
 | Camada | Escolha | Motivo |

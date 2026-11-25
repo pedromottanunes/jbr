@@ -1,5 +1,7 @@
+# Legado do planejamento inicial. O CRM atual usa Atlas, sem banco Docker local.
 services:
   postgres:
+    profiles: [legacy-postgres]
     image: postgres:18
     restart: unless-stopped
     environment:

@@ -1,10 +1,12 @@
-import { useState, useDeferredValue } from 'react';
+import {useDebouncedValue} from './useDebouncedValue';
+import { useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChartNoAxesCombined, CircleHelp, LayoutDashboard, ChartColumnIncreasing, Menu, MessagesSquare, Search, Settings2, ContactRound, X } from 'lucide-react';
-import { type Ads, type ContactPage, type Conversation, type Overview, formatMoney, formatNumber, getJson } from './api';
+import { type Ads, type ContactPage, type Overview, formatMoney, formatNumber, getJson } from './api';
 import { type Status, ConnectedConversations, ConnectedReports, ConnectedSettings } from './ConnectedPages';
 import { Leads } from './Leads';
+import {AttendanceSyncProvider} from './AttendanceSync';
 import { PaidTraffic } from './PaidTraffic';
 import { FunnelOverview as ConnectedOverview } from './FunnelOverview';
 
@@ -61,18 +63,14 @@ function AdsPage() {
 }
 
 function ConversationsPage() {
-  const list = useQuery({ queryKey: ['conversations'], queryFn: ({ signal }) => getJson<{ items: { id: string | null; contactId: string; label: string; at: string }[] }>('/conversations', signal) });
-  const sample = useQuery({ queryKey: ['conversation', 'historical-sample'], queryFn: ({ signal }) => getJson<Conversation>('/conversations/historical-sample', signal) });
-  return <><Header title="Conversas" /><QueryState isPending={list.isPending || sample.isPending} error={list.error ?? sample.error}>
-    {list.data && sample.data && <div className="conversation-layout"><aside className="conversation-list"><div className="list-top">Conversas <span className="sample-tag">Amostra</span></div>{list.data.items.slice(0, 12).map((c, i) => <div className={`conversation-item ${c.contactId === sample.data.contactId ? 'active' : ''}`} key={c.contactId}><div className="avatar">{i + 1}</div><span><b>{c.label}</b><small>{new Date(c.at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</small></span></div>)}</aside>
-    <section className="chat"><div className="chat-header"><div><strong>{sample.data.contactLabel}</strong><small>{sample.data.date}</small></div><span className="read-only">Somente leitura</span></div><div className="chat-body"><div className="chat-date">06 de outubro de 2026</div>{sample.data.messages.map((m, i) => <div key={i} className={`bubble ${m.author !== 'Contato' ? 'agent' : ''}`}><span className="bubble-author">{m.author}</span><p>{m.text}</p><time>{m.at}</time></div>)}</div><div className="chat-bottom">Trechos selecionados do histórico</div></section>
-    <aside className="contact-side"><h2>Contato</h2><dl><dt>Origem indicada</dt><dd>Google ADS</dd><dt>Interesse</dt><dd>Cadastro RNTRC</dd><dt>Campanha</dt><dd>Não determinável</dd></dl><div className="small-note">A conversa mostra apenas trechos selecionados; as etapas do bot foram omitidas.</div></aside></div>}
-  </QueryState></>;
+  const query=useQuery({queryKey:['overview'],queryFn:({signal})=>getJson<Overview>('/overview',signal)});
+  const attendance=query.data?.attendance;
+  return <><Header title="Conversas" period={query.data?.period}/><QueryState isPending={query.isPending} error={query.error}>{attendance&&<section className="kpis"><Kpi label="Entradas no expediente" value={formatNumber(attendance.inside)}/><Kpi label="Entradas fora do expediente" value={formatNumber(attendance.outside)}/><Kpi label="Respondidas no expediente" value={formatNumber(attendance.insideAnswered)}/><Kpi label="Respondidas fora do expediente" value={formatNumber(attendance.outsideAnswered)}/></section>}</QueryState></>;
 }
 
 function LeadsPage() {
   const [input, setInput] = useState('');
-  const q = useDeferredValue(input);
+  const q = useDebouncedValue(input);
   const query = useQuery({ queryKey: ['contacts', q], queryFn: ({ signal }) => getJson<ContactPage>(`/contacts?q=${encodeURIComponent(q)}`, signal) });
   return <><Header title="Leads" /><div className="toolbar"><label className="search"><Search size={18} /><input value={input} onChange={e => setInput(e.target.value)} placeholder="Buscar contato" aria-label="Buscar contato" /></label><span className="sample-tag">Amostra histórica anonimizada</span></div><QueryState isPending={query.isPending} error={query.error}>
     {query.data && <section className="panel table-panel"><div className="table-scroll"><table><thead><tr><th>Contato</th><th>Primeira entrada</th><th>Origem</th><th>Qualificado</th><th>Proposta</th></tr></thead><tbody>{query.data.items.map(c => <tr key={c.id}><td><span className="contact-name">{c.label}</span><small className="id">{c.id}</small></td><td>{new Date(c.firstInboundAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}</td><td><span className="source-pill">{c.source}</span></td><td>{c.qualified ? 'Sim' : '—'}</td><td>{c.proposal ? 'Sim' : '—'}</td></tr>)}</tbody></table></div>{query.data.items.length === 0 && <div className="state">Nenhum contato encontrado.</div>}</section>}
@@ -96,8 +94,8 @@ export function App() {
   const location = useLocation();
   const status=useQuery({queryKey:['status'],queryFn:({signal})=>getJson<Status>('/status',signal),refetchInterval:60_000});
   if(status.isPending||status.error) return <QueryState isPending={status.isPending} error={status.error}>{null}</QueryState>;
-  const live=status.data?.mode==='local';
+  const live=['local','mongo'].includes(status.data?.mode??'');
   return <div className="shell"><button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>{open && <div className="scrim" onClick={() => setOpen(false)} />}
     <aside className={`sidebar ${open ? 'open' : ''}`}><div className="brand"><img src="/jbr-logo-white.webp" alt="Grupo JBR Brasil" /><span className="brand-product">CRM <i/> JBR</span><button className="close-menu" onClick={() => setOpen(false)} aria-label="Fechar menu"><X /></button></div><nav aria-label="Menu principal">{nav.map(n => <NavLink key={n.to} to={n.to} end={n.to === '/'} onClick={() => setOpen(false)}><n.icon size={19} strokeWidth={1.8} /><span>{n.label}</span></NavLink>)}</nav><div className="sidebar-bottom"><span className="status-dot" /> Ambiente local</div></aside>
-    <main className="content" key={location.pathname}><Routes><Route path="/" element={live?<ConnectedOverview status={status.data!}/>:<OverviewPage />} /><Route path="/trafego" element={live?<PaidTraffic/>:<AdsPage />} /><Route path="/conversas" element={live?<ConnectedConversations status={status.data!}/>:<ConversationsPage />} /><Route path="/leads" element={live?<Leads status={status.data!}/>:<LeadsPage />} /><Route path="/relatorios" element={live?<ConnectedReports status={status.data!}/>:<ReportsPage />} /><Route path="/configuracoes" element={live?<ConnectedSettings status={status.data!}/>:<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></main></div>;
+    <main className="content" key={location.pathname}><AttendanceSyncProvider mode={status.data!.mode} enabled={['/','/conversas'].includes(location.pathname)}><Routes><Route path="/" element={live?<ConnectedOverview status={status.data!}/>:<OverviewPage />} /><Route path="/trafego" element={live?<PaidTraffic/>:<AdsPage />} /><Route path="/conversas" element={live?<ConnectedConversations status={status.data!}/>:<ConversationsPage />} /><Route path="/leads" element={live?<Leads status={status.data!}/>:<LeadsPage />} /><Route path="/relatorios" element={live?<ConnectedReports status={status.data!}/>:<ReportsPage />} /><Route path="/configuracoes" element={live?<ConnectedSettings status={status.data!}/>:<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></AttendanceSyncProvider></main></div>;
 }

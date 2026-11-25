@@ -1,6 +1,6 @@
 export type Origin = 'site' | 'google' | 'unknown';
 export type Stage = 'all' | 'attended' | 'unanswered';
-export type Evidence = { at:string; kind:'entry'|'message'|'reply'; text:string; chatId?:string; messageId?:string; sources?:string[] };
+export type Evidence = { at:string; kind:'entry'|'message'|'reply'; text:string; contentStored?:boolean; chatId?:string; messageId?:string; sources?:string[] };
 export type ObservedTag = {name:string; scopes:('contato'|'conversa')[]};
 export type FunnelLead = { id:string; label:string; phone:string|null; enteredAt:string; origin:Origin; googleTag:boolean; attended:boolean; firstMessageKnown:boolean; evidence:Evidence[];tags:ObservedTag[] };
 export type FunnelResult = {

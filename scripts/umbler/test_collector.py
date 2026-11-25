@@ -200,12 +200,20 @@ class ReaderTests(unittest.TestCase):
     def test_global_lock_also_blocks_different_database(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "http_state.json"
-            with patch.object(reader, "runtime_state_path", return_value=state), \
+            with patch.dict(reader.os.environ, {"APP_MODE": "local"}), \
+                 patch.object(reader, "runtime_state_path", return_value=state), \
                  patch.object(reader.TalkClient, "get") as get:
                 with reader.single_process_lock(state):
                     result = reader.main(["probe", "--db", str(Path(directory) / "other.sqlite3")])
                 self.assertEqual(result, 1)
                 get.assert_not_called()
+
+    def test_mongo_mode_blocks_legacy_collector_before_provider_access(self):
+        with patch.dict(reader.os.environ, {"APP_MODE": "mongo"}), \
+             patch.object(reader.TalkClient, "get") as get:
+            with self.assertRaises(SystemExit):
+                reader.main(["probe"])
+            get.assert_not_called()
 
     def test_unchanged_chat_page_stops_without_advancing_offset(self):
         chats = [{"id": "CHAT1", "channel": {"id": "WA123"}}]

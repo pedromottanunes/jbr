@@ -15,7 +15,7 @@ export class LocalSettings {
  }
  close(){this.db.close();}
 }
-export function registerAttendanceSettings(app:FastifyInstance,store:LocalSettings){
+export function registerAttendanceSettings(app:FastifyInstance,store:{attendance:()=>ReturnType<LocalSettings['attendance']>|Promise<ReturnType<LocalSettings['attendance']>>;setAttendance:(config:AttendanceConfig,revision:number)=>unknown}){
  app.get('/api/v1/attendance/config',async()=>store.attendance());
  app.put<{Body:AttendanceConfig&{revision:number}}>('/api/v1/attendance/config',{schema:{body:{type:'object',additionalProperties:false,required:['saturdayFrom','slaMinutes','revision'],properties:{saturdayFrom:{type:'string',pattern:'^\\d{4}-\\d{2}-\\d{2}$'},slaMinutes:{type:'integer',minimum:1,maximum:480},revision:{type:'integer',minimum:0}}}}},async(req,reply)=>{
   const {revision,...config}=req.body;const date=new Date(config.saturdayFrom+'T12:00:00Z');if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==config.saturdayFrom)return reply.code(400).send({message:'Data inválida.'});

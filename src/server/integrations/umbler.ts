@@ -5,7 +5,10 @@ const allowedPaths = [
   /^\/v1\/members\/me\/$/,
   /^\/v1\/channels\/$/,
   /^\/v1\/tags\/$/,
+  /^\/v1\/organizations\/[A-Za-z0-9_-]+\/$/,
+  /^\/v1\/contact-ratings\/$/,
   /^\/v1\/chats\/$/,
+  /^\/v1\/messages\/[A-Za-z0-9_-]+\/$/,
   /^\/v1\/chats\/[A-Za-z0-9_-]+\/relative-messages\/$/
 ];
 
