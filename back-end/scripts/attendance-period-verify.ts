@@ -70,6 +70,27 @@ try{
  a.lastMessage.eventAtUTC='2026-10-03T10:00:00.000Z';events.a.push(message('a-new',a.lastMessage.eventAtUTC,false));
  await collectUmbler(ctx,owner!,90,20,{period,cycle:'changed',fetcher:provider,intervalMs:0});assert.deepEqual(history,['a','b','a']);assert.equal(await ctx.collection('umbler_messages').countDocuments({id:'a-new'}),1);
  await collectUmbler(ctx,owner!,90,20,{period,cycle:'unchanged-again',fetcher:provider,intervalMs:0});assert.deepEqual(history,['a','b','a']);
+ // A catalog change refreshes only the first message, not covered history.
+ await ctx.collection('umbler_messages').updateOne({id:'a-first'},{$set:{'raw.ctaKey':null},$unset:{'raw.ctaCatalogVersion':''}});
+ let reclassified=0;
+ const recheck:typeof fetch=async(input,init)=>{
+  if(new URL(String(input)).pathname.endsWith('/messages/a-first/')){reclassified++;return new Response(JSON.stringify(events.a[0]));}
+  return provider(input,init);
+ };
+ await collectUmbler(ctx,owner!,90,20,{period,cycle:'catalog',fetcher:recheck,intervalMs:0});
+ await collectUmbler(ctx,owner!,90,20,{period,cycle:'catalog-again',fetcher:recheck,intervalMs:0});
+ assert.equal(reclassified,1);assert.deepEqual(history,['a','b','a']);
+ assert.equal((await ctx.collection('umbler_messages').findOne({id:'a-first'}))?.raw.content,undefined);
+ // Ratings paginate with a durable cursor and resume after a bounded batch.
+ const ratingSkips:number[]=[];
+ const ratingsProvider:typeof fetch=async(input,init)=>{
+  const u=new URL(String(input));if(!u.pathname.endsWith('/contact-ratings/'))return provider(input,init);
+  const skip=Number(u.searchParams.get('Skip'));ratingSkips.push(skip);
+  return new Response(JSON.stringify({items:Array.from({length:skip===0?50:1},(_,i)=>({id:'rating-'+(skip+i),score:5}))}));
+ };
+ assert.equal((await collectUmbler(ctx,owner!,90,2,{period,cycle:'ratings',fetcher:ratingsProvider,intervalMs:0})).status,'partial');
+ assert.equal((await collectUmbler(ctx,owner!,90,20,{period,cycle:'ratings',fetcher:ratingsProvider,intervalMs:0})).status,'complete');
+ assert.deepEqual(ratingSkips,[0,50]);assert.equal(await ctx.collection('umbler_service_ratings').countDocuments({}),51);
  // A failed refresh cannot claim that a previously missing day was analyzed.
  const failedPeriod={start:'2026-10-01',end:'2026-10-05'};
  await assert.rejects(collectUmbler(ctx,owner!,90,20,{period:failedPeriod,cycle:'failed',intervalMs:0,fetcher:async()=>new Response('{}',{status:429,headers:{'Retry-After':'1'}})}));
@@ -78,7 +99,11 @@ try{
  await enqueue(ctx,'umbler',{periods:[period],maxRequests:150});
  await ctx.collection('sync_jobs').updateOne({_id:'umbler'},{$set:{requestedAt:new Date(0),availableAt:new Date(0)}});
  const originalFetch=globalThis.fetch;
- try{globalThis.fetch=async()=>{throw new Error('Published coverage must recover without another API call');};await runWorkerOnce(ctx);assert.equal((await ctx.collection('sync_jobs').findOne({_id:'umbler'}))?.status,'complete');}
+ try{
+  globalThis.fetch=async()=>{throw new Error('Published coverage must recover without another API call');};await runWorkerOnce(ctx);
+  const recovered=await ctx.collection('sync_jobs').findOne({_id:'umbler'}),published=await ctx.collection('data_revisions').findOne({_id:'umbler'});
+  assert.equal(recovered?.status,'complete');assert.equal(recovered?.publishedAt?.toISOString(),published?.publishedAt?.toISOString());
+ }
  finally{globalThis.fetch=originalFetch;}
  app=buildApp({mode:'mongo',mongo:ctx});
  const headers={host:'127.0.0.1'};

@@ -40,7 +40,7 @@ export function registerMongoData(app:FastifyInstance,ctx:MongoContext){
   catch(error){if(error instanceof Error&&'statusCode'in error&&error.statusCode===409)return reply.code(409).send({message:error.message});throw error;}
  });
  const completedVersions=new Map<string,string>();
- const syncStatus=async(kind:'google'|'umbler'|'budget')=>{const state=await jobStatus(ctx,kind);if(state.status==='complete'||state.publishedAt){const version=JSON.stringify([state.completedAt,state.revision,state.publishedAt]);if(completedVersions.get(kind)!==version){read.invalidate();completedVersions.set(kind,version);}}return state;};
+ const syncStatus=async(kind:'google'|'umbler'|'budget')=>{const state=await jobStatus(ctx,kind);if(state.status==='complete'||state.publishedAt){const version=state.publishedAt??JSON.stringify([state.completedAt,state.revision]);if(completedVersions.get(kind)!==version){read.invalidate(kind);completedVersions.set(kind,version);}}return state;};
  registerAgentPerformance(app,()=>read.service(),config,{status:()=>syncStatus('umbler'),request:period=>ensureAttendanceCoverage(ctx,period??recentPeriod(),true)});
  app.post<{Body:Period}>('/api/v1/attendance/ensure',{schema:{body:{type:'object',required:['start','end'],additionalProperties:false,properties:{start:{type:'string',maxLength:10},end:{type:'string',maxLength:10}}}}},async(req,reply)=>{
   const result=await ensureAttendanceCoverage(ctx,req.body);return reply.code(result.status==='running'?202:200).send(result);

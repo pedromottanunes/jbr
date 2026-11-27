@@ -14,12 +14,12 @@ export function AttendanceSyncProvider({mode,enabled,children}:{mode:string;enab
  // Deduplication and cooldowns are persisted on the server across tabs/restarts.
  const ensure=useQuery({queryKey:['attendance-period-ensure',period?.start,period?.end],enabled:active,retry:false,staleTime:60_000,refetchInterval:60_000,
   queryFn:()=>sendJson<Sync>('/attendance/ensure','POST',period)});
- const poll=useQuery({queryKey:['attendance-sync'],enabled:mode==='mongo',queryFn:({signal})=>getJson<Sync>('/attendance/sync',signal),retry:false,
+ const poll=useQuery({queryKey:['attendance-sync'],enabled:active,queryFn:({signal})=>getJson<Sync>('/attendance/sync',signal),retry:false,
   refetchInterval:q=>q.state.data?.status==='running'?5000:60_000});
  useEffect(()=>{if(ensure.data?.status==='running')void client.invalidateQueries({queryKey:['attendance-sync']});},[ensure.dataUpdatedAt,client]);
  const version=poll.data?.publishedAt??(poll.data?.status==='complete'?poll.data.completedAt:undefined);
  useEffect(()=>{
-  if(!version||lastPublication.current===version)return;lastPublication.current=version;
+  if(!active||!version||lastPublication.current===version)return;lastPublication.current=version;
   // Date/version keyed screens reload from the new status; only the agent
   // report needs explicit invalidation because its key is period-only.
   void client.invalidateQueries({queryKey:['status']});void client.invalidateQueries({queryKey:['agent-performance']});

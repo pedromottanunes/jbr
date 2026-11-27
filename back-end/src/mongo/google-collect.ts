@@ -51,6 +51,6 @@ export async function collectGoogle(reader:GoogleAdsReader,customerId:string,per
   // throttling, auth failure or unknown schema. Publication is all-or-nothing.
   catch(error) {throw error;}
  }
- const data={connected:true,period:{start,end},syncedAt:new Date().toISOString(),fullSyncedAt:plan.full?new Date().toISOString():reusable.fullSyncedAt,refreshedPeriods:chunks,timezone:account.timeZone,currency:account.currencyCode,account,actions,conversionDaily,daily,campaigns:items,metrics:totals,reports};
+ const data={connected:true,period:{start,end},syncedAt:new Date().toISOString(),fullSyncedAt:plan.full?new Date().toISOString():reusable.fullSyncedAt,conversionReconciledAt:plan.full||plan.reconcile90?new Date().toISOString():reusable.conversionReconciledAt,refreshedPeriods:chunks,timezone:account.timeZone,currency:account.currencyCode,account,actions,conversionDaily,daily,campaigns:items,metrics:totals,reports};
  return data;
 }

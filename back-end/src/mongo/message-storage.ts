@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {Int32,Long,Double,Decimal128,ObjectId} from 'mongodb';
-import {extractCtaKey} from '../cta.js';
+import {extractCtaKey,ctaCatalogVersion} from '../cta.js';
 import type {MongoContext} from './connection.js';
 
 export const messageStorageId='message_storage';
@@ -28,14 +28,18 @@ export function messageFacts(row:any){
 // Allowlisted envelopes prevent text, captions, attachments, quoted messages,
 // internal notes and nested first/last-message previews from reaching storage.
 export function sourceFacts(table:string,row:any,storeContent=false){
- if(storeContent)return row;
  const raw=row.raw??(row.raw_json?JSON.parse(row.raw_json):{});
+ if(storeContent){
+  if(['messages','export_messages'].includes(table)&&raw.ctaKey===undefined)return {...row,raw:{...raw,ctaKey:extractCtaKey({content:providerText(raw)}),ctaCatalogVersion}};
+  return row;
+ }
  let safe:any;
  if(['messages','export_messages'].includes(table))safe={
   ...pick(raw,['source','messageType','messageState','isPrivate']),
   scheduledMessage:!!raw.scheduledMessage,bulkSendSession:!!raw.bulkSendSession,
   sentByOrganizationMember:pick(raw.sentByOrganizationMember,['id','name']),
   ctaKey:extractCtaKey({content:providerText(raw),...(raw.ctaKey!==undefined?{ctaKey:raw.ctaKey}:{})}),
+  ...(raw.ctaKey===undefined?{ctaCatalogVersion}:raw.ctaCatalogVersion?{ctaCatalogVersion:raw.ctaCatalogVersion}:{}),
  };
  else if(['chats','service_chats','export_chat_candidates'].includes(table))safe=chatFacts(raw);
  else if(table==='service_events')safe={...pick(raw,['previousMemberId','newMemberId']),author:pick(raw.author,['agentId'])};

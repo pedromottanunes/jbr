@@ -1,8 +1,9 @@
+import {ctaCatalogVersion,needsCtaRefresh} from '../cta.js';
 import type {MongoContext} from './connection.js';
 import {readSecret} from './secrets.js';
 import {PersistentReadGate} from './provider-gate.js';
 import {UmblerReader} from '../integrations/umbler.js';
-import {digest,loadSourceRows,normalizeSource,publishUmbler} from './datasets.js';
+import {digest,publishPendingUmbler} from './datasets.js';
 import {saveSourceBatch,sourceRow,sourceMeta,type SourceBatch} from './source-batch.js';
 import {checkSignal} from './cancellation.js';
 import {ProviderReadError} from '../integrations/read-transport.js';
@@ -14,10 +15,13 @@ import {markAttendanceCoverage} from './attendance-coverage.js';
 const stamp=(value:string)=>{const d=new Date(value);if(!Number.isFinite(+d))throw new Error('Data de evento inválida.');return d.toISOString();};
 const id=(v:unknown)=>{if(typeof v!=='string'||!/^[-\w]+$/.test(v))throw new Error('Identidade Umbler inválida.');return v;};
 class Exhausted extends Error{}
-export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxRequests=150,transport:{fetcher?:typeof fetch;intervalMs?:number;signal?:AbortSignal;period?:Period;cycle?:string}={}){
+export const umblerBatchRequests=24;
+export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxRequests=umblerBatchRequests,transport:{fetcher?:typeof fetch;intervalMs?:number;signal?:AbortSignal;period?:Period;cycle?:string}={}){
  const guard=async()=>{checkSignal(transport.signal);if(!await ctx.renew('umbler',owner))throw new Error('Posse da coleta expirada.');};
  const token=await readSecret(ctx,'umbler-token'),reader=new UmblerReader(token,new PersistentReadGate(ctx,'umbler',transport.intervalMs??3000,guard,transport.fetcher,transport.signal));
- let attempts=0;const get=async(path:string,params:Record<string,string|number>={})=>{if(attempts>=maxRequests)throw new Exhausted();attempts++;return await reader.read(path,params) as any;};
+ maxRequests=Math.max(1,Math.min(umblerBatchRequests,maxRequests));
+ const deadline=Date.now()+60000;
+ let attempts=0;const get=async(path:string,params:Record<string,string|number>={})=>{if(attempts>=maxRequests||Date.now()>=deadline)throw new Exhausted();attempts++;return await reader.read(path,params) as any;};
  const org=id((await ctx.collection('integration_state').findOne({_id:'organizationId'}))?.value);
  const now=new Date().toISOString(),period=transport.period,bounds=period?periodBounds(period,new Date(now)):undefined;
  const since=bounds?.since??new Date(Date.now()-days*86400000).toISOString(),until=bounds?.until??now;
@@ -38,7 +42,7 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
   else if(!state||state.complete||state.days!==days)state={skip:0,until:now,since,complete:false,days,signature:null,phase:'recent'};
   // A continuation retains the same discovery boundary and analytical upper bound.
   const analysisUntil=state.analysisUntil??until;
-  for(let pages=0;!state.complete&&pages<20&&attempts<maxRequests-(period?1:2);pages++){
+  for(let pages=0;!state.complete&&pages<5&&attempts<maxRequests-(period?1:2);pages++){
    const params:any={organizationId:org,ChatState:state.phase==='open'?'Open':'All',ContactTypes:'DirectMessage',Include:'MemberTimelines',IncludePinneds:'false',Compact:'false',ChatOrderBy:period?'LastMessage':'CreatedAtUTC',Order:'Desc',Skip:state.skip,Take:50,Behavior:'GetSliceOnly'};
    if(period){params.RelativeStartFromEventUTC=state.until;params.RelativeTakeDirection='TakeBefore';}
    else{params.DateEndCreatedAtUTC=state.until;if(state.phase!=='open')params.DateStartCreatedAtUTC=state.since;}
@@ -54,10 +58,14 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
    state=period?{...state,skip:state.skip+items.length,signature,complete:items.length<50||!!oldest&&stamp(oldest)<since}:!items.length&&state.phase!=='open'?{...state,skip:0,signature:null,phase:'open'}:{...state,skip:state.skip+items.length,signature,complete:items.length===0};
    sourceMeta(batch,'attendanceDiscovery',state);await save(batch);
   }
-  const progressRows=await ctx.collection('umbler_service_progress').find({organization_id:org}).toArray(),byChat=new Map(progressRows.map(r=>[r.chat_id,r]));
-  const coverageStarts=new Map((await ctx.collection('umbler_service_coverage').aggregate([{$match:{organization_id:org}},{$group:{_id:'$chat_id',start:{$min:'$start_utc'}}}],{maxTimeMS:15000}).toArray()).map(r=>[r._id,r.start]));
   const candidates=(await ctx.collection('umbler_chats').find({organization_id:org,service_candidate:true},{projection:{_id:0,id:1,'raw.firstContactMessage':1,'raw.lastMessage.eventAtUTC':1,'raw.eventAtUTC':1,'raw.createdAtUTC':1}}).maxTimeMS(15000).toArray()).filter(c=>!period||(!(c.raw.firstContactMessage?.eventAtUTC)||stamp(c.raw.firstContactMessage.eventAtUTC)<analysisUntil)&&stamp(c.raw.lastMessage?.eventAtUTC??c.raw.eventAtUTC??now)>=since);
-  const coverageRows=period?await ctx.collection('umbler_service_coverage').find({organization_id:org}).maxTimeMS(15000).toArray():[];
+  const scopeFilter={organization_id:org,chat_id:{$in:candidates.map(c=>c.id)}};
+  const [progressRows,coverageRows]=await Promise.all([
+   ctx.collection('umbler_service_progress').find(scopeFilter).maxTimeMS(15000).toArray(),
+   ctx.collection('umbler_service_coverage').find(scopeFilter,{projection:{chat_id:1,start_utc:1,end_utc:1}}).maxTimeMS(15000).toArray(),
+  ]);
+  const byChat=new Map(progressRows.map(r=>[r.chat_id,r])),coverageStarts=new Map<string,string>();
+  if(!period)for(const r of coverageRows)if(!coverageStarts.has(r.chat_id)||r.start_utc<coverageStarts.get(r.chat_id)!)coverageStarts.set(r.chat_id,r.start_utc);
   const coverageByChat=new Map<string,any[]>();for(const c of coverageRows){const list=coverageByChat.get(c.chat_id)??[];list.push(c);coverageByChat.set(c.chat_id,list);}
   const windowFor=(c:any,p:any)=>period?periodCollectionWindow(p,coverageByChat.get(c.id)??[],since,analysisUntil,stamp(c.raw.lastMessage?.eventAtUTC??c.raw.eventAtUTC??now),c.raw.firstContactMessage?.eventAtUTC?stamp(c.raw.firstContactMessage.eventAtUTC):undefined):collectionWindow(p,c.raw.lastMessage?.eventAtUTC??c.raw.eventAtUTC??now,since,now,c.raw.firstContactMessage?.eventAtUTC,coverageStarts.get(c.id));
   const priority=(c:any)=>{const p=byChat.get(c.id);return p?.complete===0?0:!p?1:2;};
@@ -66,12 +74,13 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
   // for CTA, without marking the intervening history as covered. This subtask
   // shares the request budget and leaves most calls for attendance events.
   const references=candidates.filter(c=>c.raw.firstContactMessage?.id);
-  const known=new Set((await ctx.collection('umbler_messages').find({organization_id:org,id:{$in:references.map(c=>c.raw.firstContactMessage.id)}},{projection:{chat_id:1,id:1}}).maxTimeMS(15000).toArray()).map(m=>m.chat_id+':'+m.id));
-  const checks=new Map((await ctx.collection('umbler_first_message_checks').find({organization_id:org}).maxTimeMS(15000).toArray()).map(r=>[r.chat_id,r]));
+  const known=new Set((await ctx.collection('umbler_messages').find({organization_id:org,id:{$in:references.map(c=>c.raw.firstContactMessage.id)}},{projection:{chat_id:1,id:1,'raw.ctaKey':1,'raw.ctaCatalogVersion':1}}).maxTimeMS(15000).toArray()).filter(m=>!needsCtaRefresh(m.raw??{})).map(m=>m.chat_id+':'+m.id));
+  const checks=new Map((await ctx.collection('umbler_first_message_checks').find(scopeFilter).maxTimeMS(15000).toArray()).map(r=>[r.chat_id,r]));
   let firstRequests=0;
+  const firstLimit=candidates.some(c=>windowFor(c,byChat.get(c.id)))?Math.max(1,Math.floor(maxRequests/3)):maxRequests;
   const needsFirst=(c:any)=>{const ref=c.raw.firstContactMessage,check=checks.get(c.id);return !!ref?.id&&(!period||stamp(ref.eventAtUTC)>=since&&stamp(ref.eventAtUTC)<analysisUntil)&&!known.has(c.id+':'+ref.id)&&!(check?.message_id===ref.id&&check.retry_at>now);};
   const readFirst=async(c:any)=>{
-   if(!c.raw.firstContactMessage?.id||firstRequests>=Math.min(20,Math.floor(maxRequests/5))||attempts>=maxRequests-2)return;
+   if(!c.raw.firstContactMessage?.id||firstRequests>=firstLimit||attempts>=maxRequests-2)return;
    const ref=c.raw.firstContactMessage;
    if(!needsFirst(c))return;
    const batch:SourceBatch={};let status='available';firstRequests++;
@@ -80,7 +89,7 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
     if(message.id!==ref.id||message.source!=='Contact'||message.isPrivate||(message.chat?.id&&message.chat.id!==c.id)||!['MessageModel','SentMessageModel'].includes(message._t)||stamp(message.eventAtUTC)!==stamp(ref.eventAtUTC))throw new Error('Primeira mensagem divergente.');
     sourceRow(batch,'messages',['organization_id','chat_id','id'],{organization_id:org,chat_id:c.id,id:message.id,event_at_utc:stamp(message.eventAtUTC),raw:message});
    }catch(error){if(!(error instanceof ProviderReadError)||![404,410].includes(error.status))throw error;status='unavailable';}
-   const checked={organization_id:org,chat_id:c.id,message_id:ref.id,status,checked_at:now,retry_at:status==='unavailable'?new Date(Date.parse(now)+7*86400000).toISOString():null};
+   const checked={organization_id:org,chat_id:c.id,message_id:ref.id,status,checked_at:now,ctaCatalogVersion,retry_at:status==='unavailable'?new Date(Date.parse(now)+7*86400000).toISOString():null};
    sourceRow(batch,'first_message_checks',['organization_id','chat_id'],checked);
    await save(batch);
    checks.set(c.id,checked);if(status==='available')known.add(c.id+':'+ref.id);
@@ -114,17 +123,25 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
   }
   const covered=candidates.every(c=>!windowFor(c,byChat.get(c.id))&&(!period||!needsFirst(c)));
   if(state.complete&&covered){
-  const ratings=await get('/v1/contact-ratings/',{organizationId:org,startUTC:since,endUTC:analysisUntil,Take:50,Skip:0,Behavior:'GetSliceOnly'});
-  if(!Array.isArray(ratings.items))throw new Error('Avaliações inválidas.');
-  const ratingBatch:SourceBatch={};for(const r of ratings.items)sourceRow(ratingBatch,'service_ratings',['organization_id','id'],{organization_id:org,id:id(r.id),raw:r});await save(ratingBatch);
-  await meta('attendanceRatings',{checkedAt:now,partial:ratings.items.length>=50});
+  let ratingState=(await ctx.collection('integration_state').findOne({_id:'attendanceRatingsCursor'}))?.value;
+  if(!ratingState||ratingState.scope!==scope||ratingState.cycle!==transport.cycle)ratingState={scope,cycle:transport.cycle,skip:0,complete:false,signature:null};
+  while(!ratingState.complete){
+   const ratings=await get('/v1/contact-ratings/',{organizationId:org,startUTC:since,endUTC:analysisUntil,Take:50,Skip:ratingState.skip,Behavior:'GetSliceOnly'});
+   if(!Array.isArray(ratings.items))throw new Error('Avaliações inválidas.');
+   const signature=ratings.items.map((r:any)=>id(r.id)).sort().join(',');
+   if(ratings.items.length&&signature===ratingState.signature)throw new Error('Página de avaliações repetida.');
+   const ratingBatch:SourceBatch={};for(const r of ratings.items)sourceRow(ratingBatch,'service_ratings',['organization_id','id'],{organization_id:org,id:id(r.id),raw:r});
+   ratingState={...ratingState,skip:ratingState.skip+ratings.items.length,complete:ratings.items.length<50,signature};
+   sourceMeta(ratingBatch,'attendanceRatingsCursor',ratingState);
+   sourceMeta(ratingBatch,'attendanceRatings',{checkedAt:now,partial:!ratingState.complete});await save(ratingBatch);
+  }
   }
   status=state.complete&&covered?'complete':'partial';
  }catch(e){status=e instanceof Exhausted?'partial':'error';if(!(e instanceof Exhausted))throw e;}
  // On provider failure or shutdown retain the last published snapshot. Committed
  // pages and cursors remain available to the next run without a full rebuild.
  await guard();await progress(status);await meta('publishedAt',new Date().toISOString());
- const rows=normalizeSource(await loadSourceRows(ctx));await publishUmbler(ctx,rows,owner,transport.signal);
+ const publication=await publishPendingUmbler(ctx,owner,status==='complete',transport.signal);
  if(period&&status==='complete')await markAttendanceCoverage(ctx,owner,period,now);
- return {status,requests:attempts};
+ return {status,requests:attempts,publishedAt:publication?.publishedAt?.toISOString()};
 }

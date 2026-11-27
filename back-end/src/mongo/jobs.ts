@@ -32,6 +32,11 @@ export async function enqueue(ctx: MongoContext, kind: JobKind, payload: Record<
     try {
       await ctx.transaction(async session => {
         const jobs = ctx.collection('sync_jobs'), r = await jobs.findOne({_id: kind}, {session}), now = new Date();
+        // Navigation, polling and the scheduler must not reset the retry budget
+        // after a definitive credential/permission failure. Manual retry remains
+        // available and still honors the persisted provider cooldown.
+        const manual=payload.refresh===true||payload.force===true||(kind==='umbler'&&payload.automatic===false);
+        if(r?.status==='error'&&r.automaticRetryBlocked&&!manual)return;
         let requested=payload;
         if(kind==='meta'){
           const periods=mergeMetaPeriods((payload.periods??[]) as Period[]);if(!periods.length)throw new Error('Período Meta ausente.');
@@ -74,7 +79,7 @@ export async function enqueue(ctx: MongoContext, kind: JobKind, payload: Record<
         }
         await jobs.updateOne({_id: kind}, {
           $set: {kind, status: 'queued', payload:requested, attempts: 0, batches:0, availableAt: new Date(kind==='meta'&&r?.status==='complete'?+now:Math.max(+now, +(r?.availableAt ?? 0))), requestedAt: now, message: null},
-          $inc: {revision: 1}, $unset: {owner: '', leaseUntil: '', pendingPayload: '', completedAt: '', startedAt:''},
+          $inc: {revision: 1}, $unset: {owner: '', leaseUntil: '', pendingPayload: '', completedAt: '', startedAt:'',automaticRetryBlocked:''},
         }, {upsert: true, session});
       });
       return jobStatus(ctx, kind);
@@ -83,7 +88,7 @@ export async function enqueue(ctx: MongoContext, kind: JobKind, payload: Record<
   throw new Error('Fila ocupada.');
 }
 
-export async function completeJob(ctx: MongoContext, id: string, owner: string, result?:{status:string}) {
+export async function completeJob(ctx: MongoContext, id: string, owner: string, result?:{status:string;publishedAt?:string}) {
   await ctx.transaction(async session => {
     const jobs = ctx.collection('sync_jobs');
     const r = await jobs.findOne({_id: id, owner, status: 'running', leaseUntil: {$gt: new Date()}}, {session});
@@ -97,9 +102,9 @@ export async function completeJob(ctx: MongoContext, id: string, owner: string, 
       // Keep the current interval stable while its discovery/history pages resume.
       const rest=subtractPeriods(r.pendingPayload?.periods??[],remaining);
       const periods=[...remaining,...rest],batches=Number(r.batches??0)+1;
-      const delay=partial&&batches%6===0?15*60_000:60_000;
+      const delay=60_000;
       await jobs.updateOne({_id:id,owner},{
-        $set:{status:periods.length?'queued':'complete',completedAt:new Date(),publishedAt:new Date(),availableAt:new Date(Date.now()+delay),attempts:0,batches,
+        $set:{status:periods.length?'queued':'complete',completedAt:new Date(),...(result?.publishedAt?{publishedAt:new Date(result.publishedAt)}:{}),availableAt:new Date(Date.now()+delay),attempts:0,batches,
           message:partial?'Análise parcial salva. A coleta continuará do ponto registrado.':null,
           payload:{...r.payload,periods},...(!partial?{requestedAt:new Date()}:{}),
         },$unset:{owner:'',leaseUntil:'',pendingPayload:''},

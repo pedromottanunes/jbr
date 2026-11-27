@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from 'vitest';
 import Fastify from 'fastify';
-import {metaDashboard,mergeMetaPeriods,registerMeta} from './meta.js';
+import {metaDashboard,mergeMetaPeriods,registerMeta,metaNearLimit} from './meta.js';
 import {enqueue,completeJob} from './jobs.js';
 import {metaAccounts,emptyMeta,sumMeta,type MetaSnapshot} from '../../../shared/meta.js';
 import {MetaAdsReader,safeMetaUrl,metaMetrics} from '../integrations/meta-ads.js';
@@ -15,6 +15,12 @@ describe('Meta reporting semantics',()=>{
  it('normalizes missing optional metrics without guessing reach and preserves net adjustments',()=>{expect(metaMetrics({spend:'12.30',clicks:'4',actions:[{action_type:'lead',value:'2'},{action_type:'post_interaction_net',value:'-3'}]})).toMatchObject({spend:12.3,clicks:4,reach:null,actions:{lead:2,post_interaction_net:-3}});});
 });
 describe('Meta guarded transport',()=>{
+ it('backs off for Insights and account limits as well as application limits',()=>{
+  expect(metaNearLimit(new Headers({'x-fb-ads-insights-throttle':'{"acc_id_util_pct":94}'}))).toBe(true);
+  expect(metaNearLimit(new Headers({'x-ad-account-usage':'{"acc_id_util_pct":90}'}))).toBe(true);
+  expect(metaNearLimit(new Headers({'x-app-usage':'{"call_count":91}'}))).toBe(true);
+  expect(metaNearLimit(new Headers({'x-app-usage':'invalid','x-fb-ads-insights-throttle':'{"acc_id_util_pct":40}'}))).toBe(false);
+ });
  it('uses Authorization and cursor pagination, never a provider next URL',async()=>{
   const urls:string[]=[];const f=vi.fn(async(input:any,init:any)=>{urls.push(String(input));expect(init.headers.Authorization).toBe('Bearer fixture-secret');return new Response(JSON.stringify(urls.length===1?{data:[{id:'1'}],paging:{next:'https://evil.test/?access_token=DO_NOT_USE',cursors:{after:'cursor-one'}}}:{data:[{id:'2'}]}));});
   const r=new MetaAdsReader('fixture-secret',new ReadGate(0,f));expect(await r.pages('act_'+metaAccounts[0].id+'/ads',{})).toHaveLength(2);expect(urls[1]).toContain('after=cursor-one');expect(urls.every(u=>u.startsWith('https://graph.facebook.com/v27.0/')&&!u.includes('secret')&&!u.includes('DO_NOT_USE'))).toBe(true);

@@ -8,9 +8,11 @@ import {mongoGoogleTokens} from './secrets.js';
 import {GoogleAdsReader} from '../integrations/google-ads.js';
 import {BudgetCoordinator} from '../budget-service.js';
 import {collectGoogle} from './google-collect.js';
-import {collectUmbler} from './umbler-collect.js';
+import {collectUmbler,umblerBatchRequests} from './umbler-collect.js';
+import {ctaCatalogVersion} from '../cta.js';
 import {PersistentReadGate} from './provider-gate.js';
-import {ProviderReadError} from '../integrations/read-transport.js';
+import {ProviderReadError,transientReadError,integrationActionRequired} from '../integrations/read-transport.js';
+import {BudgetError} from '../account-budget.js';
 import {checkSignal,pause,WorkerStopping} from './cancellation.js';
 import {resumeContentPurge} from './message-retention.js';
 import {attendanceAnalysisVersion,periodDays,umblerPeriods} from './attendance-period.js';
@@ -28,19 +30,22 @@ export async function runWorkerOnce(ctx:MongoContext,signal?:AbortSignal,lane:'a
   // Expired executions are recoverable. A former owner cannot complete the newer job.
   await ctx.collection('sync_jobs').updateMany({status:'running',attempts:{$gte:3},leaseUntil:{$lte:new Date()}},{$set:{status:'error',completedAt:new Date(),availableAt:new Date(Date.now()+300000),message:'Coleta interrompida após três tentativas. Dados publicados preservados.'},$unset:{owner:'',leaseUntil:''}});
   await ctx.collection('sync_jobs').updateMany({status:'running',attempts:{$lt:3},leaseUntil:{$lte:new Date()}},{$set:{status:'queued',availableAt:new Date(),message:'Retomando coleta interrompida.'},$unset:{owner:'',leaseUntil:''}});
-  job=await ctx.collection('sync_jobs').findOneAndUpdate({...scope,status:'queued',availableAt:{$lte:new Date()}},{$set:{status:'running',owner,startedAt:new Date(),leaseUntil:new Date(Date.now()+120000)},$inc:{attempts:1}},{sort:{requestedAt:1},returnDocument:'after'});
+  job=await ctx.collection('sync_jobs').findOneAndUpdate({...scope,status:'queued',availableAt:{$lte:new Date()}},{$set:{status:'running',owner,startedAt:new Date(),leaseUntil:new Date(Date.now()+120000)},$inc:{attempts:1}},{sort:{availableAt:1,requestedAt:1},returnDocument:'after'});
   if(!job)return false;resource=job.kind==='umbler'?'umbler':job.kind==='meta'?'meta':'google';
   if(!await ctx.lease(resource,120000,owner)){await ctx.collection('sync_jobs').updateOne({_id:job._id,owner},{$set:{status:'queued',availableAt:new Date(Date.now()+5000)},$inc:{attempts:-1},$unset:{owner:'',leaseUntil:''}});return false;}
   let lost=false,renewing=false;const keep=async()=>{if(renewing)return;renewing=true;try{if(!await ctx.renew(workerLease,owner)||!await ctx.renew(resource!,owner)){lost=true;return;}const result=await ctx.collection('sync_jobs').updateOne({_id:job._id,owner,status:'running',leaseUntil:{$gt:new Date()}},{$set:{leaseUntil:new Date(Date.now()+120000)}});if(!result.matchedCount)lost=true;}finally{renewing=false;}};
   timer=setInterval(()=>{void keep().catch(()=>{lost=true;});},20000);
   const guard=async()=>{checkSignal(signal);if(lost||!await ctx.renew(resource!,owner))throw new Error('Lease lost');};
-  let result:{status:string}|undefined;
+  let result:{status:string;publishedAt?:string}|undefined;
   if(job.kind==='umbler'){
    const period=umblerPeriods(job.payload,job.requestedAt)[0];
    if(!period)throw new Error('Coleta sem período.');
-   const days=periodDays(period),saved=await ctx.collection('attendance_coverage').countDocuments({_id:{$in:days},version:attendanceAnalysisVersion,checkedAt:{$gte:job.requestedAt}});
+   const days=periodDays(period),saved=await ctx.collection('attendance_coverage').countDocuments({_id:{$in:days},version:attendanceAnalysisVersion,ctaCatalogVersion,checkedAt:{$gte:job.requestedAt}});
    // Recover a crash after publication/coverage commit without rereading Umbler.
-   result=saved===days.length?{status:'complete'}:await collectUmbler(ctx,owner,Number(job.payload?.days??90),Number(job.payload?.maxRequests??150),{signal,period,cycle:job.requestedAt.toISOString()});
+   if(saved===days.length){
+    const revision=await ctx.collection('data_revisions').findOne({_id:'umbler'},{projection:{publishedAt:1}});
+    result={status:'complete',publishedAt:revision?.publishedAt?.toISOString()};
+   }else result=await collectUmbler(ctx,owner,Number(job.payload?.days??90),Math.min(umblerBatchRequests,Number(job.payload?.maxRequests??umblerBatchRequests)),{signal,period,cycle:job.requestedAt.toISOString()});
   }
   else if(job.kind==='meta'){await collectMeta(ctx,job.payload.periods[0],guard,signal);}
   else{
@@ -58,13 +63,14 @@ export async function runWorkerOnce(ctx:MongoContext,signal?:AbortSignal,lane:'a
   await guard();await completeJob(ctx,job._id,owner,result);return true;
  }catch(error){
   const stopping=signal?.aborted||error instanceof WorkerStopping;
-  const retry=stopping||(error instanceof ProviderReadError&&(error.status===429||error.status>=500)&&job?.attempts<3);
-  const delay=Math.max(60000,15000*2**Math.min(job?.attempts??1,3),error instanceof ProviderReadError?error.retryAfterMs:0);
-  if(job)await ctx.collection('sync_jobs').updateOne({_id:job._id,owner},{$set:{status:retry?'queued':'error',completedAt:new Date(),availableAt:new Date(Date.now()+(stopping?5000:delay)),message:stopping?'Coleta pausada para reinício do servidor.':retry?'Aguardando o provedor para tentar novamente.':'A coleta foi interrompida. Os dados publicados e o progresso foram preservados.'},...(stopping?{$inc:{attempts:-1}}:{}),$unset:{owner:'',leaseUntil:''}});return true;
+  const retry=stopping||(transientReadError(error)&&job?.attempts<3);
+  const delay=Math.max(60000,15000*2**Math.min(job?.attempts??1,3),error instanceof ProviderReadError||error instanceof BudgetError?error.retryAfterMs:0);
+  const requiresAttention=!stopping&&integrationActionRequired(error);
+  if(job)await ctx.collection('sync_jobs').updateOne({_id:job._id,owner},{$set:{status:retry?'queued':'error',automaticRetryBlocked:requiresAttention,completedAt:new Date(),availableAt:new Date(Date.now()+(stopping?5000:delay)),message:stopping?'Coleta pausada para reinício do servidor.':retry?'Aguardando o provedor para tentar novamente.':requiresAttention?'Revise as credenciais e permissões da integração e tente atualizar novamente. Os dados publicados foram preservados.':'A coleta foi interrompida. Os dados publicados e o progresso foram preservados.'},...(stopping?{$inc:{attempts:-1}}:{}),$unset:{owner:'',leaseUntil:''}});return true;
  }finally{if(timer)clearInterval(timer);if(resource)await ctx.release(resource,owner);await ctx.release(workerLease,owner);}
 }
 export async function schedule(ctx:MongoContext){
- for(const [kind,interval,payload] of [['budget',900000,{}],['umbler',900000,{days:90,maxRequests:150}],['google',3600000,{}]] as [JobKind,number,any][]){
+ for(const [kind,interval,payload] of [['budget',900000,{}],['umbler',900000,{days:7,maxRequests:umblerBatchRequests,automatic:true}],['google',3600000,{}]] as [JobKind,number,any][]){
   const r=await ctx.collection('sync_jobs').findOne({_id:kind});if(!r||(!['queued','running'].includes(r.status)&&Date.now()-(+(r.completedAt??r.requestedAt??0))>=interval))await enqueue(ctx,kind,payload);
  }
 }

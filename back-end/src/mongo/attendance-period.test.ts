@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {dayStart,periodBounds,periodCollectionWindow,mergeAttendancePeriods,subtractPeriods,missingAttendancePeriods,attendanceAnalysisVersion,umblerPeriods} from './attendance-period';
+import {ctaCatalogVersion} from '../cta';
 const now=new Date('2026-11-25T12:00:00Z');
 const stamp=(day:string)=>day+'T03:00:00.000Z';
 describe('attendance period planning',()=>{
@@ -18,7 +19,7 @@ describe('attendance period planning',()=>{
   expect(umblerPeriods({periods:pending})).toEqual(pending);
  });
  it('refreshes recent discovery after 15 minutes and older discovery after a day',()=>{
-  const row=(day:string,minutes:number)=>({_id:day,version:attendanceAnalysisVersion,checkedAt:new Date(+now-minutes*60000)});
+  const row=(day:string,minutes:number)=>({_id:day,version:attendanceAnalysisVersion,ctaCatalogVersion,checkedAt:new Date(+now-minutes*60000)});
   const p={start:'2026-11-17',end:'2026-11-19'};
   expect(missingAttendancePeriods(p,[row('2026-11-17',16),row('2026-11-18',16),row('2026-11-19',1)],now)).toEqual([{start:'2026-11-18',end:'2026-11-18'}]);
   expect(missingAttendancePeriods({start:'2026-10-01',end:'2026-10-01'},[row('2026-10-01',1440)],now)).toHaveLength(1);

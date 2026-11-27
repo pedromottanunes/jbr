@@ -1,5 +1,6 @@
 import {validPeriod,type Period} from '../../../shared/period.js';
 import {localDay} from '../../../shared/business-hours.js';
+import {ctaCatalogVersion} from '../cta.js';
 
 export const attendanceAnalysisVersion=1;
 export const recentRefreshMs=15*60_000;
@@ -36,7 +37,7 @@ export function umblerPeriods(payload:any,now=new Date()):Period[]{
 }
 export function missingAttendancePeriods(period:Period,rows:any[],now=new Date()){
  const byDay=new Map(rows.map(r=>[r._id,r])),recent=nextDay(localDay(+now),-7);
- const missing=periodDays(period).filter(day=>{const row=byDay.get(day),age=+now-+(row?.checkedAt??0);return row?.version!==attendanceAnalysisVersion||!row?.checkedAt||age<0||age>=(day>=recent?recentRefreshMs:historicalRefreshMs);});
+ const missing=periodDays(period).filter(day=>{const row=byDay.get(day),age=+now-+(row?.checkedAt??0);return row?.version!==attendanceAnalysisVersion||row?.ctaCatalogVersion!==ctaCatalogVersion||!row?.checkedAt||age<0||age>=(day>=recent?recentRefreshMs:historicalRefreshMs);});
  return mergeAttendancePeriods(missing.map(day=>({start:day,end:day})));
 }
 

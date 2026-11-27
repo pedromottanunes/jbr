@@ -37,10 +37,17 @@ export function cachedMetaSnapshot(info:any,period:Period,days:MetaDay[],details
  for(const row of result.adsets){const d=details.find(d=>d.adset?.id===row.id);if(d)row.status=d.adset.status;}
  return result;
 }
+const schemaReady=new WeakMap<MongoContext,Promise<void>>();
 export class MetaCache {
+ private dayReads=new Map<string,Promise<MetaDay[]>>();
  constructor(private ctx:MongoContext,private reader:MetaAdsReader,private guard:()=>Promise<void>){}
  async setup(){
-  for(const name of ['meta_daily','meta_accounts','meta_creatives'])await this.ctx.collection(name).createIndex({expiresAt:1},{expireAfterSeconds:0});
+  let pending=schemaReady.get(this.ctx);
+  if(!pending){pending=this.createIndexes();schemaReady.set(this.ctx,pending);pending.catch(()=>schemaReady.delete(this.ctx));}
+  await pending;
+ }
+ private async createIndexes(){
+  for(const name of ['meta_daily','meta_accounts','meta_creatives','meta_snapshots'])await this.ctx.collection(name).createIndex({expiresAt:1},{expireAfterSeconds:0});
   await this.ctx.collection('meta_daily').createIndex({accountId:1,day:1},{unique:true});
   await this.ctx.collection('meta_creatives').createIndex({accountId:1});
   await this.ctx.collection('meta_snapshots').createIndex({periodKey:1});
@@ -52,7 +59,12 @@ export class MetaCache {
   if(info.account_id!==accountId)throw new Error('Conta Meta divergente.');
   await this.guard();await c.updateOne({_id:accountId},{$set:{info,updatedAt:new Date(),expiresAt:new Date(Date.now()+30*86400000)}},{upsert:true});return info;
  }
- async days(accountId:string,period:Period):Promise<MetaDay[]>{return await this.ctx.collection('meta_daily').find({accountId,day:{$gte:period.start,$lte:period.end},expiresAt:{$gt:new Date()}}).toArray() as any;}
+ async days(accountId:string,period:Period):Promise<MetaDay[]>{
+  const key=accountId+':'+period.start+':'+period.end;
+  let pending=this.dayReads.get(key);
+  if(!pending){pending=this.ctx.collection('meta_daily').find({accountId,day:{$gte:period.start,$lte:period.end},expiresAt:{$gt:new Date()}}).toArray() as Promise<MetaDay[]>;this.dayReads.set(key,pending);pending.catch(()=>this.dayReads.delete(key));}
+  return pending;
+ }
  async ensure(accountId:string,period:Period,kind:DailyKind){
   const saved=await this.days(accountId,period),missing=missingMetaDays(period,saved,kind);
   for(const range of missing)for(let start=range.start;start<=range.end;start=nextDay(start,93)){
@@ -65,6 +77,14 @@ export class MetaCache {
     return {updateOne:{filter:{_id:accountId+':'+day},update:{$set:{accountId,day,version:metaDailyVersion,[kind]:data,['checked.'+kind]:at.toISOString(),updatedAt:at,expiresAt:new Date(+at+30*86400000)}},upsert:true}};
    });
    await this.guard();await this.ctx.collection('meta_daily').bulkWrite(operations,{ordered:false});
+   // Reuse this run's data only after the durable write succeeded. Invalidate
+   // other overlapping read windows rather than keeping stale in-memory days.
+   const key=accountId+':'+period.start+':'+period.end;
+   for(const k of this.dayReads.keys())if(k.startsWith(accountId+':')&&k!==key)this.dayReads.delete(k);
+   for(const op of operations){const update=op.updateOne.update.$set;let d=saved.find(d=>d.day===update.day);
+    if(!d){d={accountId,day:update.day,version:metaDailyVersion,checked:{}};saved.push(d);}
+    d.version=metaDailyVersion;d[kind]=update[kind] as MetaRow[];d.checked[kind]=at.toISOString();
+   }
   }
  }
  async details(accountId:string,ids:string[]){

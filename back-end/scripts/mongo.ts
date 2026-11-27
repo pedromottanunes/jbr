@@ -45,7 +45,7 @@ async function main(){
    const arg=(key:string)=>{const n=process.argv.indexOf(key);return n<0?undefined:process.argv[n+1];};
    const payload=command==='umbler'?{days:Number(arg('--days')??90),maxRequests:Number(arg('--max-requests')??150)}:command==='budget'?{force:true}:arg('--start')?{start:arg('--start'),end:arg('--end')}:{};
    if(command==='umbler'&&(!Number.isInteger((payload as any).days)||(payload as any).days<1||(payload as any).days>366||!Number.isInteger((payload as any).maxRequests)||(payload as any).maxRequests<1||(payload as any).maxRequests>150))throw new Error('Parâmetros de coleta inválidos.');
-   await enqueue(ctx,command as JobKind,payload);
+   await enqueue(ctx,command as JobKind,{...payload,refresh:true});
    do{await runWorkerOnce(ctx,shutdown.signal);const status=await jobStatus(ctx,command as JobKind);if(status.status!=='running'){console.log(JSON.stringify(status));if(status.status==='error')process.exitCode=1;return;}await wait();}while(!stopping);
    return;
   }

@@ -13,7 +13,9 @@ export function googleCollectionPlan(request:Period,previous:any,today:string,ma
  const full=!known||!Array.isArray(previous.daily)||!Array.isArray(previous.conversionDaily)||!previous.reports||now-Date.parse(previous.fullSyncedAt??'')>=7*86400000||!Number.isFinite(Date.parse(previous.fullSyncedAt??''));
  if(full)return {coverage,chunks:periodChunks(coverage),full:true};
  const intervals:Period[]=[];
- const recent=shift(today,-89);
+ const reconcileAt=Date.parse(previous?.conversionReconciledAt??'');
+ const reconcile90=!Number.isFinite(reconcileAt)||now-reconcileAt>=86400000;
+ const recent=shift(today,reconcile90?-89:-6);
  if(coverage.end>=recent)intervals.push({start:coverage.start>recent?coverage.start:recent,end:coverage.end});
  if(coverage.start<known.start)intervals.push({start:coverage.start,end:shift(known.start,-1)});
  if(coverage.end>known.end)intervals.push({start:shift(known.end,1),end:coverage.end});
@@ -22,6 +24,6 @@ export function googleCollectionPlan(request:Period,previous:any,today:string,ma
  if(!intervals.length)intervals.push(request);
  intervals.sort((a,b)=>a.start.localeCompare(b.start));const merged:Period[]=[];
  for(const p of intervals){const last=merged.at(-1);if(last&&p.start<=shift(last.end,1)){if(p.end>last.end)last.end=p.end;}else merged.push({...p});}
- return {coverage,chunks:merged.flatMap(periodChunks),full:false};
+ return {coverage,chunks:merged.flatMap(periodChunks),full:false,reconcile90};
 }
 export function outsideGoogleRefresh(date:string,chunks:Period[]){return !chunks.some(p=>date>=p.start&&date<=p.end);}

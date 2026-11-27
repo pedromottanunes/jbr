@@ -1,7 +1,17 @@
 /** One guarded transport for provider reads. No generic URL is accepted by callers. */
 import {setTimeout as delay} from 'node:timers/promises';
+import {BudgetError} from '../account-budget.js';
 export class ProviderReadError extends Error {
   constructor(public readonly status: number, message: string, public readonly retryAfterMs=0) { super(message); }
+}
+export function transientReadError(error:unknown){
+ return error instanceof BudgetError?['temporary','rate_limit','oauth_busy'].includes(error.code):
+  error instanceof ProviderReadError?error.status===429||error.status===408||error.status>=500:
+  error instanceof Error&&(['TimeoutError','AbortError'].includes(error.name)||error instanceof TypeError&&/fetch failed|network|socket/i.test(error.message));
+}
+export function integrationActionRequired(error:unknown){
+ return error instanceof ProviderReadError?[401,403].includes(error.status):
+  error instanceof BudgetError&&['reconnect','permission','configuration','credential_storage','account_mismatch'].includes(error.code);
 }
 
 export type ReadTransport = typeof fetch;

@@ -1,4 +1,5 @@
 import type {MongoContext} from './connection.js';
+import {ctaCatalogVersion} from '../cta.js';
 import type {Period} from '../../../shared/period.js';
 import {enqueue,jobStatus} from './jobs.js';
 import {attendanceAnalysisVersion,missingAttendancePeriods,periodBounds,periodDays} from './attendance-period.js';
@@ -21,6 +22,6 @@ export async function markAttendanceCoverage(ctx:MongoContext,owner:string,perio
  await ctx.transaction(async session=>{
   const held=await ctx.collection('integration_leases').updateOne({_id:'umbler',owner,expiresAt:{$gt:new Date()}},{$set:{expiresAt:new Date(Date.now()+120000)}},{session});
   if(!held.matchedCount)throw new Error('Posse da coleta expirada.');
-  await ctx.collection('attendance_coverage').bulkWrite(periodDays(period).map(day=>({updateOne:{filter:{_id:day},update:{$set:{version:attendanceAnalysisVersion,checkedAt:new Date(),observedAt}},upsert:true}})),{session});
+  await ctx.collection('attendance_coverage').bulkWrite(periodDays(period).map(day=>({updateOne:{filter:{_id:day},update:{$set:{version:attendanceAnalysisVersion,ctaCatalogVersion,checkedAt:new Date(),observedAt}},upsert:true}})),{session});
  });
 }

@@ -6,6 +6,17 @@ const row=(date:string,spend=10):MetaRow=>({...emptyMeta(),id:'ad1',accountId:'1
 const day=(date:string):MetaDay=>({day:date,accountId:'1',version:metaDailyVersion,account:[row(date)],ads:[row(date)],instagram:[row(date,4)],checked:{account:new Date(now).toISOString(),ads:new Date(now).toISOString(),instagram:new Date(now).toISOString()}});
 const info={account_id:'1',name:'Fixture',currency:'BRL',timezone_name:'America/Sao_Paulo',account_status:1};
 describe('Incremental Meta daily cache',()=>{
+ it('reuses one Mongo read during collection and sees newly persisted coverage',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(now);
+  try{
+   const find=vi.fn(()=>({toArray:async()=>[]})),bulkWrite=vi.fn(async()=>({}));
+   const reader={daily:vi.fn(async()=>[])},cache=new MetaCache({collection:()=>({find,bulkWrite})} as any,reader as any,async()=>{});
+   await cache.ensure('1',period,'account');await cache.ensure('1',period,'ads');await cache.ensure('1',period,'instagram');
+   await cache.ensure('1',period,'account');
+   expect(find).toHaveBeenCalledTimes(1);expect(reader.daily).toHaveBeenCalledTimes(1);
+   expect((await cache.days('1',period)).every(d=>Array.isArray(d.ads)&&Array.isArray(d.instagram))).toBe(true);
+  }finally{vi.useRealTimers();}
+ });
  it('reuses overlapping days and requests only absent dates, including gaps',()=>{
   expect(missingMetaDays(period,[day('2026-11-25'),day('2026-11-26')],'ads',now,'2026-11-27')).toEqual([{start:'2026-11-27',end:'2026-11-27'}]);
   expect(missingMetaDays(period,[day('2026-11-26')],'ads',now,'2026-11-27')).toEqual([{start:'2026-11-25',end:'2026-11-25'},{start:'2026-11-27',end:'2026-11-27'}]);

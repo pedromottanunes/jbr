@@ -10,6 +10,17 @@ import {validPeriod,type Period} from '../../../shared/period.js';
 import {enqueue,jobStatus} from './jobs.js';
 import {MetaCache,cachedMetaSnapshot,readCachedMeta,seedLegacyMeta} from './meta-cache.js';
 
+export function metaNearLimit(headers:Headers){
+ const fields:Record<string,string[]>={
+  'x-app-usage':['call_count','total_cputime','total_time'],
+  'x-fb-ads-insights-throttle':['app_id_util_pct','acc_id_util_pct'],
+  'x-ad-account-usage':['acc_id_util_pct'],
+ };
+ return Object.entries(fields).some(([header,keys])=>{
+  try{const data=JSON.parse(headers.get(header)??'{}');return keys.some(k=>Number(data?.[k]??0)>=90);}catch{return false;}
+ });
+}
+
 export function metaDashboard(period:Period,snapshots:MetaSnapshot[],account='',campaign=''):MetaDashboard{
  const wanted=metaAccounts.filter(a=>!account||a.id===account),selected=snapshots.filter(s=>wanted.some(a=>a.id===s.accountId)&&metaPeriodKey(s.period)===metaPeriodKey(period));
  const rows=(key:'campaigns'|'adsets'|'ads'|'instagram')=>selected.flatMap(s=>s[key]).filter(r=>!campaign||(key==='campaigns'?r.id:r.campaignId)===campaign);
@@ -23,12 +34,12 @@ export async function collectMeta(ctx:MongoContext,period:Period,guard:()=>Promi
  const fetcher:typeof fetch=async(input,init)=>{
   const r=await fetch(input,init);
   // Meta can report throttling as HTTP 400. Preserve the shared provider cooldown.
-  let throttled=false;const usage=r.headers.get('x-app-usage');try{const u=JSON.parse(usage??'{}');throttled=Math.max(Number(u.call_count??0),Number(u.total_cputime??0),Number(u.total_time??0))>=90;}catch{}
+  const throttled=metaNearLimit(r.headers);
   if(!r.ok){const b:any=await r.clone().json().catch(()=>null);if([4,17,32,613,80004].includes(b?.error?.code)){await ctx.collection('provider_limits').updateOne({_id:'meta'},{$max:{nextAt:new Date(Date.now()+300000)}},{upsert:true});await r.body?.cancel();throw new ProviderReadError(429,'Meta em espera.',300000);}}
   if(throttled)await ctx.collection('provider_limits').updateOne({_id:'meta'},{$max:{nextAt:new Date(Date.now()+60000)}},{upsert:true});return r;
  };
  const reader=new MetaAdsReader(token,new PersistentReadGate(ctx,'meta',850,guard,fetcher,signal));
- const c=ctx.collection('meta_snapshots');await c.createIndex({expiresAt:1},{expireAfterSeconds:0});
+ const c=ctx.collection('meta_snapshots');
  const cache=new MetaCache(ctx,reader,guard);await cache.setup();await seedLegacyMeta(ctx);
  const pending:{id:string;info:any;data:MetaSnapshot}[]=[];
  const publish=async(data:MetaSnapshot)=>{
@@ -93,6 +104,6 @@ export function registerMeta(app:FastifyInstance,ctx:MongoContext){
   const fresh=docs.length===metaAccounts.length&&docs.every(d=>!d.data?.derived&&!d.data?.detailsPending&&Date.now()-Number(d.updatedAt)<(req.body.refresh?600000:3600000));
   if(fresh)return {status:'complete',completedAt:new Date().toISOString()};
   if(!await ctx.collection('integration_credentials').findOne({_id:'meta-ads-token'},{projection:{_id:1}}))return reply.code(409).send({message:'Credencial Meta não configurada no backend.'});
-  return reply.code(202).send(await enqueue(ctx,'meta',{periods:[{start:req.body.start,end:req.body.end}]}));
+  return reply.code(202).send(await enqueue(ctx,'meta',{periods:[{start:req.body.start,end:req.body.end}],refresh:!!req.body.refresh}));
  });
 }

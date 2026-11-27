@@ -6,6 +6,15 @@ const now=Date.parse('2026-11-27T15:00:00Z');
 const old={connected:true,period:{start:'2026-01-01',end:'2026-11-20'},daily:[],conversionDaily:[],reports:{},fullSyncedAt:new Date(now).toISOString()};
 afterEach(()=>vi.useRealTimers());
 describe('Google incremental collection',()=>{
+ it('uses seven days for frequent refreshes but reconciles 90 days daily',()=>{
+  const recent={...old,conversionReconciledAt:new Date(now-3600000).toISOString()};
+  const request={start:'2026-11-21',end:'2026-11-27'};
+  const short=googleCollectionPlan(request,recent,'2026-11-27',false,now);
+  expect(short.chunks).toEqual([request]);expect(short.reconcile90).toBe(false);
+  const daily=googleCollectionPlan(request,{...recent,conversionReconciledAt:new Date(now-86400000).toISOString()},'2026-11-27',false,now);
+  expect(daily.chunks[0].start).toBe('2026-08-30');expect(daily.reconcile90).toBe(true);
+  expect(googleCollectionPlan({start:'2026-02-01',end:'2026-02-03'},recent,'2026-11-27',true,now).chunks[0]).toEqual({start:'2026-02-01',end:'2026-02-03'});
+ });
  it('reuses older dates, includes new dates and rechecks late conversions',()=>{
   const plan=googleCollectionPlan({start:'2026-11-21',end:'2026-11-27'},old,'2026-11-27',false,now);
   expect(plan.full).toBe(false);expect(plan.coverage).toEqual({start:'2026-01-01',end:'2026-11-27'});

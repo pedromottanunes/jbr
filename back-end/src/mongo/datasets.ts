@@ -46,8 +46,32 @@ export async function loadSourceRows(ctx:MongoContext):Promise<Rows>{
   service_coverage:['organization_id','chat_id','start_utc','end_utc'],service_ratings:['id'],
  };
  for(const [name,keys] of Object.entries(fields))rows[name]=await ctx.collection('umbler_'+name).find({},{projection:{_id:0,...Object.fromEntries(keys.map(k=>[k,1]))}}).maxTimeMS(15000).toArray();
- rows.crm_meta=(await ctx.collection('integration_state').find({}).maxTimeMS(15000).toArray()).map(r=>({key:r._id,value:JSON.stringify(r.value)}));
+ rows.crm_meta=(await ctx.collection('integration_state').find({_id:{$ne:'attendanceDirty'}}).maxTimeMS(15000).toArray()).map(r=>({key:r._id,value:JSON.stringify(r.value)}));
  return rows;
+}
+// Checkpoints are durable immediately; expensive analytical views publish at
+// most once per three minutes during backfill, and always on completion.
+export async function publishPendingUmbler(ctx:MongoContext,owner:string,force=false,signal?:AbortSignal){
+ const [dirty,previous]=await Promise.all([
+  ctx.collection('integration_state').findOne({_id:'attendanceDirty'}),
+  ctx.collection('data_revisions').findOne({_id:'umbler'}),
+ ]);
+ const changed=!previous||dirty?.value!==false;
+ if(changed&&!force&&previous&&Date.now()-+previous.publishedAt<180000)return previous;
+ if(changed)await publishUmbler(ctx,normalizeSource(await loadSourceRows(ctx)),owner,signal);
+ await ctx.transaction(async session=>{
+  signal?.throwIfAborted();
+  const held=await ctx.collection('integration_leases').updateOne({_id:'umbler',owner,expiresAt:{$gt:new Date()}},{$set:{expiresAt:new Date(Date.now()+120000)}},{session});
+  if(!held.matchedCount)throw new Error('Posse da coleta expirada.');
+  if(changed)await ctx.collection('integration_state').updateOne({_id:'attendanceDirty'},{$set:{value:false}},{session,upsert:true});
+  else {
+   const rows=await ctx.collection('integration_state').find({_id:{$in:['attendanceSync','attendancePublishedAt','attendanceRatings','publishedAt']}},{session}).toArray();
+   const update:Record<string,unknown>={publishedAt:new Date()};
+   for(const r of rows){update['meta.'+r._id]=r.value;update['serviceMeta.'+r._id]=r.value;}
+   await ctx.collection('data_revisions').updateOne({_id:'umbler'},{$set:update},{session});
+  }
+ });
+ return ctx.collection('data_revisions').findOne({_id:'umbler'},{projection:{publishedAt:1}});
 }
 // Same normalization as the former Python publisher; provider IDs and conservative coverage are preserved.
 export function normalizeSource(rows:Rows):Rows&{crm_contacts:any[];crm_chats:any[];crm_messages:any[]}{
@@ -126,7 +150,12 @@ export class MongoReads {
  private serviceCache?:{generation:string;data:Promise<any>};
  private pointers=new Map<string,{until:number;data:Promise<any>}>();
  constructor(readonly ctx:MongoContext){}
- invalidate(){this.pointers.clear();this.analyticsCache=undefined;this.serviceCache=undefined;}
+ invalidate(provider?:'umbler'|'google'|'budget'){
+  // Provider updates refresh only their pointer. Collection generations decide
+  // whether heavy cached data changed; a status/budget update never evicts it.
+  if(provider){this.pointers.delete(provider);return;}
+  this.pointers.clear();this.analyticsCache=undefined;this.serviceCache=undefined;
+ }
  private pointer(id:string){
   let cached=this.pointers.get(id);if(!cached||cached.until<=Date.now()){
    const data=this.ctx.collection('data_revisions').findOne({_id:id});cached={until:Date.now()+2000,data};this.pointers.set(id,cached);

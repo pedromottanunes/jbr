@@ -25,6 +25,7 @@ export async function saveSourceBatch(ctx: MongoContext, owner: string, batch: S
     );
     if (!held.matchedCount) throw new Error('Posse da coleta expirada.');
     const policy=await messageStorage(ctx,session);
+    let changed=false;
     for (const [name, operations] of Object.entries(batch)) {
       checkSignal(signal);
       const safe=operations.map((op:any)=>{
@@ -32,7 +33,11 @@ export async function saveSourceBatch(ctx: MongoContext, owner: string, batch: S
         const row=sourceFacts(name.slice(7),{...op.updateOne.update.$set,_id:op.updateOne.filter._id},policy.storeContent);
         return {replaceOne:{filter:op.updateOne.filter,replacement:row,upsert:op.updateOne.upsert}};
       });
-      if (safe.length) await ctx.collection(name).bulkWrite(safe, {ordered: false, session});
+      if (safe.length){
+        const result=await ctx.collection(name).bulkWrite(safe, {ordered: false, session});
+        if(['umbler_chats','umbler_messages','umbler_crm_members','umbler_service_events','umbler_service_coverage','umbler_service_ratings','umbler_chat_sync'].includes(name)&&(result.modifiedCount||result.upsertedCount))changed=true;
+      }
     }
+    if(changed)await ctx.collection('integration_state').updateOne({_id:'attendanceDirty'},{$set:{value:true}},{upsert:true,session});
   });
 }

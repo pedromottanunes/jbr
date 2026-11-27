@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {sourceFacts,messageFacts} from './message-storage';
 import {normalizeSource} from './datasets';
 import {buildViews,analytics} from './model';
-import {ctaTexts,extractCtaKey,ctaRecordFor} from '../cta';
+import {ctaTexts,extractCtaKey,ctaRecordFor,ctaCatalogVersion,needsCtaRefresh} from '../cta';
 import {summarize} from '../funnel';
 import {attendance,ctaByTime} from '../attendance';
 import {performance} from '../agent-performance';
@@ -22,6 +22,16 @@ const metrics=(views:ReturnType<typeof buildViews>)=>{
  return {funnel:summarize(a.funnel,{},period,until),attendance:attendance(a.attendance.conversations,period.start,period.end),cta:ctaByTime(a.attendance.leads,period.start,period.end),agents:performance(views.service_conversations,views.members,period.start,period.end,defaultAttendanceConfig)};
 };
 describe('message retention',()=>{
+ it('reclassifies unknown first messages after catalog changes without rereading positive matches',()=>{
+  expect(needsCtaRefresh({ctaKey:null})).toBe(true);
+  expect(needsCtaRefresh({ctaKey:null,ctaCatalogVersion:'old'})).toBe(true);
+  expect(needsCtaRefresh({ctaKey:null,ctaCatalogVersion})).toBe(false);
+  expect(needsCtaRefresh({ctaKey:extractCtaKey({content:ctaTexts()[0]}),ctaCatalogVersion:'old'})).toBe(false);
+  const clean=sourceFacts('messages',{raw:{content:secret}});
+  expect(clean.raw.ctaCatalogVersion).toBe(ctaCatalogVersion);expect(needsCtaRefresh(clean.raw)).toBe(false);
+  const legacy=sourceFacts('messages',{raw:{ctaKey:null}});
+  expect(needsCtaRefresh(legacy.raw)).toBe(true);
+ });
  it('keeps every catalog CTA identifiable without retaining the incoming text',()=>{
   for(const content of ctaTexts()){
    const key=extractCtaKey({content:content.toUpperCase()});expect(key).toMatch(/^[a-f0-9]{64}$/);expect(ctaRecordFor({ctaKey:key})?.text).toBe(content);
