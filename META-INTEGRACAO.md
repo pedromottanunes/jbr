@@ -1,8 +1,8 @@
 # Meta — integração de métricas da JBR
 
-Estado conferido em 27/11/2026. Escopo: somente leitura das contas de anúncios do portfólio JBR ANTT. Não criar/editar anúncios, campanhas, públicos, orçamentos, pagamentos ou enviar mensagens.
+Estado conferido em **27/11/2026**. Escopo: leitura das contas de anúncios do portfólio JBR ANTT. Nenhuma campanha, anúncio, público, orçamento, cobrança ou mensagem foi alterado.
 
-## Configuração concluída
+## Recursos configurados
 
 | Recurso | Nome | ID |
 |---|---|---|
@@ -13,46 +13,63 @@ Estado conferido em 27/11/2026. Escopo: somente leitura das contas de anúncios 
 | Conta de anúncios | JBR CARTÃO | 523435535018960 |
 | Conta de anúncios | JBR [CA - RESERVA] | 2705808446379845 |
 
-O usuário autorizou a leitura das três contas. Os usuários do sistema e aplicativos anteriores não foram alterados. As três contas foram atribuídas ao usuário novo com **Ver desempenho**. O aplicativo JBR Integração foi atribuído com **Desenvolver app**, que a interface apresenta junto com Ver insights e Testar app. Não foi concedida administração geral do portfólio nem gerenciamento das contas de anúncios.
+O usuário autorizou as três contas. Usuários do sistema e aplicativos anteriores foram preservados. O novo usuário recebeu **Ver desempenho** nas três contas e **Desenvolver app** no aplicativo novo, apresentado pela interface junto com Ver insights e Testar app. Sem administração geral do portfólio nem gerenciamento das contas de anúncios.
 
-Os IDs acima são as identificações das contas exibidas pela Meta. O parâmetro `selected_asset_id` das URLs do Business Suite pode ser diferente e não deve ser utilizado como ID da conta na Graph API.
+Os IDs das contas foram confirmados pela Graph API. O parâmetro selected_asset_id nas URLs do Business pode ser diferente; não usá-lo como ID da conta na API.
 
-BM TESTE - HÉLIO apresenta aviso de desabilitação por forma de pagamento. Nenhuma cobrança ou configuração financeira foi alterada. A disponibilidade de seus relatórios históricos ainda precisa ser validada pela API.
+## Aplicativo publicado
 
-## Aplicativo e páginas públicas
-
-- Status **Publicado** confirmado na interface, com a mensagem de publicação concluída.
-- Categoria: Negócio e Páginas.
-- Domínio: `jbr-o9l2.onrender.com`.
-- E-mail de contato do app: `pedromottanunes@hotmail.com`.
+- Status **Publicado**, confirmado novamente após a geração do token.
+- Categoria: Negócio e Páginas; domínio jbr-o9l2.onrender.com.
+- Contato do app: pedromottanunes@hotmail.com.
 - Política: https://jbr-o9l2.onrender.com/privacidade.html
-- Instruções de exclusão: https://jbr-o9l2.onrender.com/exclusao-de-dados.html
-- Contato de solicitações da JBR: `comercial@jbrantt.com.br`, já presente no material institucional do projeto.
+- Exclusão de dados: https://jbr-o9l2.onrender.com/exclusao-de-dados.html
+- Contato institucional: comercial@jbrantt.com.br.
 
-Páginas HTML estáticas em `front-end/public`, disponíveis sem login e sem depender de JavaScript. Links também incluídos no rodapé de login. Build e entrega HTTP 200 verificados localmente e no Render. Commit da publicação: `7620608`.
+Páginas estáticas em front-end/public, públicas e vinculadas no login. Build e HTTP 200 verificados localmente e no Render. Commit 7620608.
 
-Os dois casos de uso previamente selecionados na criação foram mantidos: gerenciamento de anúncios e mensuração de desempenho. A presença desses casos de uso não significa concessão de todas as permissões no token. A solicitação de token realizada contém **somente `ads_read`**, sem `ads_management`, `business_management`, permissões de Páginas, WhatsApp ou Instagram orgânico.
+Os dois casos de uso previamente selecionados foram mantidos: gerenciamento e mensuração de anúncios. Sua presença não concede todas as permissões ao token.
 
-## Pendência concreta: aprovação da geração do token
+## Token emitido e armazenado
 
-Foi solicitada a geração para o usuário novo e o aplicativo novo, com expiração **Nunca**. Isso significa ausência de expiração programada, não imunidade a revogação.
+A solicitação 28634533266224535 foi aprovada por Glauco Merlim. A geração foi concluída para o aplicativo e usuário novos, com opção de validade **Nunca**. Isso significa ausência de expiração programada; mudanças de segurança ou acesso podem revogá-lo. A expiração não foi conferida pelo endpoint de depuração de tokens.
 
-A Meta impôs aprovação por **outro administrador** do portfólio. A tela confirma que Pedro Nunes solicitou a geração para JBR Integração, permissão `ads_read`. O pedido expira em sete dias.
+A API confirmou **ads_read** e a permissão básica automática **public_profile**. Não retornou ads_management, business_management ou permissões de WhatsApp/Páginas/Instagram orgânico.
 
-- Solicitação: `28634533266224535`.
-- Link: https://business.facebook.com/latest/settings/requests?business_id=107227610975997&selected_request_id=28634533266224535
-- Estado verificado: **Solicitação enviada**.
-- Token ainda não emitido nem armazenado. Nenhuma consulta à Graph API foi executada com esta integração.
+- GET /app: JBR Integração, 1129420006733991.
+- GET /me: CRM JBR Métricas, ID no contexto do aplicativo 122097464991567426; o ID administrativo no Business continua 61597022790216.
+- Banco: jbr_crm_dev, coleção integration_credentials, documento **meta-ads-token**.
+- Token protegido com **AES-256-GCM** pelo mecanismo protectSecret existente no backend. Gravação e leitura com comparação em memória verificadas com sucesso.
+- Backup criptografado: local-data/meta-ads-token.enc, ignorado pelo Git.
+- Recuperação: carregar CREDENTIALS_ENCRYPTION_KEY do ambiente privado e chamar readSecret(ctx, 'meta-ads-token'). Para o backup, usar protectSecret(conteudoDoArquivo, false). Consumir em memória, sem imprimir nem enviar ao frontend.
+- Preservar a chave de criptografia separadamente dos backups e usar a mesma no Render. O token não foi colocado no código, repositório, frontend, URLs ou logs.
 
-Não repetir a geração enquanto o pedido estiver pendente, nem tentar aprovar usando outra identidade. Outro administrador deve acessar Pedidos e aprovar pessoalmente.
+A conexão local inicialmente falhou porque o IP atual não estava autorizado. Após o usuário abrir o projeto JBR no Atlas, foi usado **Add Current IP Address** nesse projeto; a conexão e a gravação passaram. Não foi liberado acesso global à internet nem desabilitada a validação TLS.
 
-## Retomada após aprovação
+## Validação somente de leitura
 
-1. Confirmar a aprovação do pedido, a identidade do aplicativo e do usuário novo.
-2. Concluir a geração e preservar a credencial criptografada antes de fechar a janela. Usar o mecanismo de segredos do backend, coleção `integration_credentials`, chave dedicada `meta-ads-token`, com `CREDENTIALS_ENCRYPTION_KEY`. Nunca inserir a credencial em arquivos versionados, frontend, URL ou logs. A gravação ainda não ocorreu.
-3. Selecionar versão suportada da Graph API na documentação vigente. Validar token/identidade e ler cada conta autorizada com `Authorization: Bearer`.
-4. Fazer consultas pequenas a campanhas, conjuntos, anúncios e insights, com período explícito, incluindo moeda e fuso de cada conta. Registrar paginação e critério de atribuição; não somar alcance de contas como pessoas únicas nem tratar ausência de dados como zero confirmado.
-5. Conferir permissões e Marketing API Access Tier. Na inspeção inicial o Tier estava como **Acesso limitado**. Publicação não equivale a App Review, acesso ampliado ou validação das APIs.
-6. Integrar a coleta ao backend e ao painel com cobertura por conta/período, deduplicação, fila e limites de chamadas. Essa implementação de métricas Meta ainda não foi realizada; preservar Google Ads, Umbler e as regras de armazenamento mínimo existentes.
+Período explícito: **01/11/2026 a 26/11/2026**. Todas as contas informaram **BRL** e **America/Sao_Paulo**. Insights no nível de conta, com use_account_attribution_setting=true.
 
-Referências oficiais: [Usuários do sistema](https://developers.facebook.com/docs/business-management-apis/system-users/), [Tokens](https://developers.facebook.com/docs/business-management-apis/system-users/install-apps-and-generate-tokens/), [Visão geral e níveis de acesso](https://developers.facebook.com/docs/business-management-apis/system-users/overview/).
+| Conta | Investimento | Impressões | Cliques | Resultado |
+|---|---:|---:|---:|---|
+| BM TESTE - HÉLIO | R$ 876,62 | 58.387 | 703 | HTTP 200 |
+| JBR CARTÃO | R$ 1.069,17 | 49.867 | 788 | HTTP 200 |
+| JBR [CA - RESERVA] | — | — | — | HTTP 200, sem linhas no período |
+
+BM TESTE - HÉLIO possui status 3 e aviso de pagamento na interface; os relatórios históricos funcionaram. As outras contas retornaram status 1. Nenhuma configuração financeira foi alterada.
+
+Leituras de /act_ID, /campaigns, /adsets, /ads e /insights bem-sucedidas nas três contas. Campanhas, conjuntos e anúncios foram amostrados com limite de uma linha; as duas primeiras contas indicaram páginas adicionais. A reserva retornou listas vazias. Essa validação não é uma sincronização completa. Conversões e ROAS ainda não foram validados.
+
+As chamadas iniciais solicitavam v25.0 e receberam versão efetiva v27.0. Uma consulta adicional explicitamente em **v27.0** confirmou HTTP 200 e o aplicativo esperado. Usar v27.0 na implementação. Relatório sanitizado: local-data/meta-validation.json, fora do Git, sem tokens ou URLs de paginação.
+
+## Estado da plataforma e próximos passos
+
+**Aplicativo publicado, usuário novo configurado, token emitido, acesso validado e credencial armazenada no Atlas. O coletor periódico e o painel Meta no CRM ainda não foram implementados.**
+
+1. Usar o segredo meta-ads-token no backend e restringir as consultas às três contas deste documento. Validar no ambiente Render com sua chave de criptografia antes de ativar a coleta.
+2. Integrar a coleta à fila e aos leases existentes: deduplicação por conta/período, atualização incremental, paginação, limites e tentativas com espera progressiva. Não chamar a Meta a cada renderização do frontend.
+3. Persistir apenas métricas e metadados necessários, com cobertura, moeda, fuso e estado da sincronização. Distinguir erro, ausência de linhas e zero medido. Não somar alcance entre contas como pessoas únicas.
+4. Preservar Google Ads, Umbler e a política existente de armazenamento mínimo.
+5. Marketing API Access Tier novamente conferido: **Acesso limitado**; ads_read aparece como **Pronto para teste**. Publicação e testes bem-sucedidos não equivalem a App Review ou acesso ampliado para outros clientes.
+
+Referências: [Usuários do sistema](https://developers.facebook.com/docs/business-management-apis/system-users/), [Tokens](https://developers.facebook.com/docs/business-management-apis/system-users/install-apps-and-generate-tokens/), [Insights](https://developers.facebook.com/docs/graph-api/reference/adaccount/insights/).
