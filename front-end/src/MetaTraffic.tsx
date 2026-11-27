@@ -28,7 +28,7 @@ function noticeLabel(message:string){
 }
 function MetaNotice({label,message}:{label:string;message:string}){return <details className="meta-inline-notice"><summary><Info size={13}/>{label}</summary><div className="meta-notice-detail">{message}</div></details>;}
 type Sync={status:string;completedAt?:string;publishedAt?:string;message?:string};
-function useMetaSync(period:Period,needed:boolean){
+export function useMetaSync(period:Period,needed:boolean){
  const client=useQueryClient();const [manual,setManual]=useState(0);
  const automatic=useQuery({queryKey:['meta-ensure',period.start,period.end],enabled:needed,queryFn:()=>sendJson<Sync>('/meta/sync','POST',period),staleTime:60000,retry:false,refetchOnWindowFocus:false});
  const refresh=useMutation({mutationFn:()=>sendJson<Sync>('/meta/sync','POST',{...period,refresh:true}),onSuccess:d=>{if(d.status==='running')setManual(Date.now());else void client.invalidateQueries({queryKey:['meta-detail']});}});
