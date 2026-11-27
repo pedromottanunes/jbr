@@ -80,18 +80,20 @@ Atualização de desempenho (27/11/2026): a Meta tem uma fila de execução inde
 
 ### Armazenamento e proteção
 
+Atualização incremental (27/11/2026): `meta_daily` guarda uma cobertura por conta/dia com métricas de conta, anúncios e Instagram. Períodos sobrepostos reutilizam esses dias; somente lacunas e dias vencidos são consultados. Os últimos 28 dias têm validade mínima de dez minutos para revisões de atribuição, e o histórico é reconciliado semanalmente quando solicitado. O resumo aparece antes da complementação de alcance. `meta_accounts` e `meta_creatives` reutilizam cadastros e criativos por uma hora. A migração reaproveita as séries diárias anteriores sem API. Cache diário limitado, após coleta, a 400 dias/8 MiB por conta, com TTL de trinta dias; não inclui arquivos de mídia.
+
 `meta_snapshots` guarda um documento por conta/período exato, com índices de expiração (TTL de trinta dias), limite de oito períodos após coleta completa e limite de 1,5 MB por documento. Cada conta é publicada atomicamente; totais consolidados só aparecem quando todas as contas selecionadas estão disponíveis. As contas concluídas há menos de dez minutos são reaproveitadas nas tentativas seguintes.
 
 Guardamos apenas métricas e metadados selecionados dos criativos (texto limitado, URLs de prévia/publicação e estado). Não baixamos vídeos ou imagens nem persistimos respostas brutas. A coleta validada de 01–26/11 retornou sete campanhas e treze anúncios com veiculação no Instagram, prévias e links; os três documentos somaram aproximadamente 100 KiB de JSON.
 
 O token permanece em `integration_credentials/meta-ads-token`, descriptografado somente em memória no backend com `CREDENTIALS_ENCRYPTION_KEY`. **Não é necessário adicionar token da Meta ao frontend ou criar nova variável no Render.** O Render precisa usar o mesmo banco, a mesma chave e manter `INTEGRATIONS_ENABLED=true` e um worker ativo (`EMBEDDED_WORKER=true` na implantação atual).
 
-Somente GET na Graph API v27.0, contas autorizadas fixas, token em Authorization Bearer, paginação por cursor reconstruído (nunca seguindo URLs que contenham token), máximo de 180 chamadas por execução, 30 páginas/2.500 linhas por relatório e intervalo persistido entre requisições. Respostas limitadas, cancelamento no desligamento e mensagens de erro sem credenciais. Outros portfólios não são consultados.
+Somente GET na Graph API v27.0, contas autorizadas fixas, token em Authorization Bearer, paginação por cursor reconstruído (nunca seguindo URLs que contenham token), máximo de 180 chamadas por execução, 30 páginas de até 500 linhas, limite de 2.500 linhas por relatório agregado/15.000 por bloco diário de até 93 dias e intervalo persistido entre requisições. Respostas limitadas, cancelamento no desligamento e mensagens de erro sem credenciais. Outros portfólios não são consultados.
 
 ### Semântica das métricas
 
 - A ação escolhida define as conversões e o custo por conversão. `lead` e `offsite_conversion.fb_pixel_lead`, por exemplo, podem representar a mesma conversão e não são somados entre si. Grupos de engajamento também não têm um total artificial de ações sobrepostas.
-- Relatórios completos por período, `action_report_time=impression` e `use_unified_attribution_setting=true`. Atribuição pode incluir visualização; ações/cliques não equivale a pessoas únicas nem conversão exclusivamente pós-clique.
+- Métricas aditivas por dia, `action_report_time=impression` e `use_unified_attribution_setting=true`. Alcance é consultado separadamente para o intervalo exato e não bloqueia a exibição das métricas já disponíveis. Atribuição pode incluir visualização; ações/cliques não equivale a pessoas únicas nem conversão exclusivamente pós-clique.
 - Alcance e frequência são exibidos somente a partir de um total único fornecido pela API para conta ou campanha. Não se somam alcance diário, contas ou anúncios. Moedas diferentes impedem um total financeiro consolidado.
 - ROAS só aparece para uma ação de compra com valor informado. Não representa receita confirmada no CRM.
 - Instagram refere-se ao desempenho **pago**, com breakdown `publisher_platform=instagram`. Não inclui métricas orgânicas. A mesma publicação pode aparecer em anúncios diferentes. Falha de acesso ao detalhamento ou criativo gera aviso, preservando os demais relatórios.

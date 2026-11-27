@@ -52,4 +52,10 @@ Para execução contínua futura, é possível usar um serviço sempre ativo ou 
 
 ## Acesso
 
+### Cache incremental da Meta
+
+O endpoint de leitura não chama a Meta. Primeiro procura o relatório do intervalo exato; se não existir, monta as métricas com os dias disponíveis em `meta_daily`. O worker busca somente dias ausentes ou vencidos: os últimos 28 dias podem ser reconsultados após dez minutos; dias anteriores são revisados semanalmente. A entrada automática na fila continua com uma hora de validade por relatório, e a atualização manual com dez minutos. Dias sem atividade também recebem cobertura explícita. Uma falha de paginação não marca os dias como coletados.
+
+Os resumos são publicados antes dos detalhes. Investimento, impressões, cliques e ações são agregados por dia; alcance não é somado: consultas separadas obtêm o alcance deduplicado do intervalo exato, em segundo plano. Cadastros das contas e criativos têm cache de uma hora; não baixamos arquivos de mídia. A migração reaproveita os resumos diários antigos sem chamar a API. O cache diário tem retenção de 30 dias e, ao concluir a coleta, é limitado a 400 dias/8 MiB por conta (fora os índices). Relatórios exatos mantêm o limite de oito períodos. Referência: [boas práticas de Insights da Meta](https://developers.facebook.com/docs/marketing-api/insights/best-practices/).
+
 `AUTH_USERNAME` e `AUTH_PASSWORD_HASH` são obrigatórios em produção com dados reais. Sessões usam cookies HttpOnly, Secure e SameSite=Lax; somente o digest do token é persistido, com expiração TTL. Mutações exigem a origem HTTPS configurada. Tentativas de login são limitadas. Alterar o usuário ou hash invalida sessões anteriores. É um acesso de administrador único, sem níveis de permissão por usuário nesta etapa.

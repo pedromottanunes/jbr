@@ -73,7 +73,7 @@ export async function enqueue(ctx: MongoContext, kind: JobKind, payload: Record<
           }
         }
         await jobs.updateOne({_id: kind}, {
-          $set: {kind, status: 'queued', payload:requested, attempts: 0, batches:0, availableAt: new Date(Math.max(+now, +(r?.availableAt ?? 0))), requestedAt: now, message: null},
+          $set: {kind, status: 'queued', payload:requested, attempts: 0, batches:0, availableAt: new Date(kind==='meta'&&r?.status==='complete'?+now:Math.max(+now, +(r?.availableAt ?? 0))), requestedAt: now, message: null},
           $inc: {revision: 1}, $unset: {owner: '', leaseUntil: '', pendingPayload: '', completedAt: '', startedAt:''},
         }, {upsert: true, session});
       });
@@ -90,7 +90,7 @@ export async function completeJob(ctx: MongoContext, id: string, owner: string, 
     if (!r) throw new Error('Posse da tarefa expirada.');
     if(r.kind==='meta'){
       const remaining=r.payload.periods.slice(1);
-      await jobs.updateOne({_id:id,owner},{$set:{status:remaining.length?'queued':'complete',completedAt:new Date(),publishedAt:new Date(),availableAt:new Date(Date.now()+30000),attempts:0,message:null,'payload.periods':remaining},$unset:{owner:'',leaseUntil:''}},{session});return;
+      await jobs.updateOne({_id:id,owner},{$set:{status:remaining.length?'queued':'complete',completedAt:new Date(),publishedAt:new Date(),availableAt:new Date(),attempts:0,message:null,'payload.periods':remaining},$unset:{owner:'',leaseUntil:''}},{session});return;
     }
     if(r.kind==='umbler'){
       const partial=result?.status==='partial',current=umblerPeriods(r.payload,r.requestedAt),remaining=partial?current:current.slice(1);

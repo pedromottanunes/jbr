@@ -13,8 +13,8 @@ export const metaAccounts = [
 ] as const;
 export type MetaMetrics={spend:number;impressions:number;clicks:number;linkClicks:number;reach:number|null;actions:Record<string,number>;values:Record<string,number>};
 export type MetaRow=MetaMetrics&{id:string;accountId:string;name:string;campaignId:string;campaignName:string;adsetId:string;adsetName:string;platform?:string;date?:string;status?:string;objective?:string;creative?:{title:string;body:string;image:string|null;permalink:string|null;format:string;instagramId:string}};
-export type MetaSnapshot={accountId:string;accountName:string;currency:string;timezone:string;accountStatus:number;period:Period;syncedAt:string;total:MetaMetrics;campaigns:MetaRow[];adsets:MetaRow[];ads:MetaRow[];instagram:MetaRow[];daily:MetaRow[];warnings:string[]};
-export type MetaDashboard={period:Period;accounts:{id:string;name:string;available:boolean;syncedAt:string|null;currency:string|null;status:number|null;warning:string|null}[];available:boolean;stale:boolean;total:MetaMetrics|null;campaigns:MetaRow[];adsets:MetaRow[];ads:MetaRow[];instagram:MetaRow[];daily:MetaRow[];currencies:string[];warnings:string[];syncedAt:string|null};
+export type MetaSnapshot={accountId:string;accountName:string;currency:string;timezone:string;accountStatus:number;period:Period;syncedAt:string;total:MetaMetrics;campaigns:MetaRow[];adsets:MetaRow[];ads:MetaRow[];instagram:MetaRow[];daily:MetaRow[];warnings:string[];derived?:boolean;detailsPending?:boolean};
+export type MetaDashboard={period:Period;accounts:{id:string;name:string;available:boolean;syncedAt:string|null;currency:string|null;status:number|null;warning:string|null}[];available:boolean;stale:boolean;needsSync?:boolean;total:MetaMetrics|null;campaigns:MetaRow[];adsets:MetaRow[];ads:MetaRow[];instagram:MetaRow[];daily:MetaRow[];currencies:string[];warnings:string[];syncedAt:string|null};
 export const actionLabels:Record<string,string>={
  lead:'Leads',purchase:'Compras',omni_purchase:'Compras em todos os canais',offsite_conversion_fb_pixel_lead:'Leads no site',
  'offsite_conversion.fb_pixel_lead':'Leads no site','offsite_conversion.fb_pixel_purchase':'Compras no site',
