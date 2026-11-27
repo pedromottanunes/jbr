@@ -12,6 +12,23 @@ const customer={id:scope.customerId,currencyCode:'BRL',timeZone:'America/Sao_Pau
 const budget={id:'1',status:'APPROVED',approvedStartDateTime:'2026-01-01 00:00:00',approvedEndTimeType:'FOREVER',adjustedSpendingLimitMicros:'5000000000',amountServedMicros:'3700000000'};
 const response=()=>[{results:[{customer,accountBudget:budget}]}];
 const fakeReader=()=>({account:vi.fn().mockResolvedValue([{results:[{customer}]}]),accountBudgets:vi.fn().mockResolvedValue(response())});
+it('queued budget refresh preserves automatic cadence and provider cooldown without querying Google in HTTP handlers',async()=>{
+ const settings=new LocalSettings(':memory:'),app=Fastify(),reader=fakeReader(),store=new BudgetStore(settings.db);
+ let now=Date.parse('2026-11-27T15:00:00Z');const requestSync=vi.fn(async(force:boolean)=>({status:'pending',force}));
+ registerAdsBalance(app,settings,async()=>({}),{scope,reader,store,autoSync:false,clock:()=>now,requestSync});
+ const post=(force:boolean)=>app.inject({method:'POST',url:'/api/v1/ads/balance/sync',payload:{force}});
+ try{
+  expect((await post(false)).statusCode).toBe(202);expect(requestSync).toHaveBeenLastCalledWith(false);
+  const claim=store.claim(scope,false,now);if(!claim.claimed)throw new Error('claim');
+  await post(false);expect(requestSync).toHaveBeenCalledTimes(1);
+  store.finish(scope,claim.owner,{errorCode:'rate_limit',retryAfterMs:60000},now);
+  now+=31000;expect((await post(true)).json().status).toBe('cooldown');expect(requestSync).toHaveBeenCalledTimes(1);
+  now+=30000;expect((await post(true)).statusCode).toBe(202);expect(requestSync).toHaveBeenLastCalledWith(true);
+  expect((await post(false)).json().status).toBe('cooldown');expect(requestSync).toHaveBeenCalledTimes(2);
+  now+=900000;expect((await post(false)).statusCode).toBe(202);expect(requestSync).toHaveBeenLastCalledWith(false);
+  expect(reader.account).not.toHaveBeenCalled();expect(reader.accountBudgets).not.toHaveBeenCalled();
+ }finally{await app.close();settings.close();}
+});
 it('coordena duas conexões de banco, limita frequência e preserva a leitura após erro',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'jbr-budget-')),s1=new LocalSettings(join(dir,'settings.db')),s2=new LocalSettings(join(dir,'settings.db'));
  let now=Date.parse('2026-11-24T15:00:00Z');const reader=fakeReader(),a=new BudgetCoordinator(new BudgetStore(s1.db),scope,reader,()=>now),b=new BudgetCoordinator(new BudgetStore(s2.db),scope,reader,()=>now);

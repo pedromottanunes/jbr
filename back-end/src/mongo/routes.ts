@@ -45,7 +45,7 @@ export function registerMongoData(app:FastifyInstance,ctx:MongoContext){
  app.post<{Body:Period}>('/api/v1/attendance/ensure',{schema:{body:{type:'object',required:['start','end'],additionalProperties:false,properties:{start:{type:'string',maxLength:10},end:{type:'string',maxLength:10}}}}},async(req,reply)=>{
   const result=await ensureAttendanceCoverage(ctx,req.body);return reply.code(result.status==='running'?202:200).send(result);
  });
- registerAdsBalance(app,null,()=>read.ads('daily'),{store:new MongoBudgetStore(ctx),tokenProvider:mongoGoogleTokens(ctx),autoSync:false,syncStatus:()=>syncStatus('budget'),requestSync:async()=>{const job=await requestJob('budget',{force:true});return {status:'pending',nextAttemptAt:job.nextAttemptAt};}});
+ registerAdsBalance(app,null,()=>read.ads('daily'),{store:new MongoBudgetStore(ctx),tokenProvider:mongoGoogleTokens(ctx),autoSync:false,syncStatus:()=>syncStatus('budget'),requestSync:async(force)=>{const job=await requestJob('budget',{force});return {status:'pending',nextAttemptAt:job.nextAttemptAt};}});
  app.get('/api/v1/status',async()=>{const r=await read.revision();return {mode:'mongo',storage:'MongoDB Atlas',provider:'Umbler Talk',...r.meta,totals:r.totals,googleAds:{connected:(await read.adsHeader()).connected}};});
  app.get('/api/v1/overview',async()=>{const r=await read.revision();return {mode:'mongo',...r.totals,...r.meta,range:r.range};});
  app.get('/api/v1/ads',ads);

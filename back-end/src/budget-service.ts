@@ -66,7 +66,7 @@ export async function budgetReport(store:BudgetPersistence,scope:BudgetScope,ads
   source:'Google Ads · account_budget',
  };
 }
-export function registerAdsBalance(app:FastifyInstance,settings:LocalSettings|null,readAds:()=>Promise<any>,options:{scope?:BudgetScope;reader?:Reader;autoSync?:boolean;clock?:()=>number;store?:BudgetPersistence;tokenProvider?:import('./integrations/google-oauth.js').GoogleTokenProvider;requestSync?:()=>Promise<any>;syncStatus?:()=>Promise<any>}={}){
+export function registerAdsBalance(app:FastifyInstance,settings:LocalSettings|null,readAds:()=>Promise<any>,options:{scope?:BudgetScope;reader?:Reader;autoSync?:boolean;clock?:()=>number;store?:BudgetPersistence;tokenProvider?:import('./integrations/google-oauth.js').GoogleTokenProvider;requestSync?:(force:boolean)=>Promise<any>;syncStatus?:()=>Promise<any>}={}){
  const store=options.store??new BudgetStore(settings!.db);let scope=options.scope;
  try{if(!scope&&process.env.GOOGLE_ADS_CUSTOMER_ID)scope={environment:process.env.CRM_ENVIRONMENT??'local',clientId:'jbr',customerId:customerId(process.env.GOOGLE_ADS_CUSTOMER_ID)};if(scope)scope={...scope,customerId:customerId(scope.customerId)};}catch{scope=undefined;}
  const boundScope=scope;
@@ -86,7 +86,14 @@ export function registerAdsBalance(app:FastifyInstance,settings:LocalSettings|nu
  });
  app.post<{Body:{force?:boolean}}>('/api/v1/ads/balance/sync',{preValidation:enforceScope,schema:{querystring:querySchema,body:{type:'object',additionalProperties:false,properties:{force:{type:'boolean'}}}}},async(req,reply)=>{
   if(!coordinator)return reply.code(409).send({message:errorMessages.configuration});
-  const result=options.requestSync?await options.requestSync():await coordinator.request(req.body.force??true);return reply.code(result.status==='cooldown'?200:202).send(result);
+  const force=req.body.force??true;
+  if(options.requestSync&&boundScope){
+   const now=options.clock?.()??Date.now(),record=await store.record(boundScope);
+   if(record?.state==='pending'&&await store.pendingAlive(boundScope,now))return reply.code(202).send({status:'pending'});
+   const next=Math.max(record?Date.parse(record.lastAttemptAt)+(force?30000:900000):0,record?.retryAt?Date.parse(record.retryAt):0);
+   if(next>now)return {status:'cooldown',nextAttemptAt:new Date(next).toISOString()};
+  }
+  const result=options.requestSync?await options.requestSync(force):await coordinator.request(force);return reply.code(result.status==='cooldown'?200:202).send(result);
  });
  app.put<{Body:BudgetLimits}>('/api/v1/ads/balance/limits',{preValidation:enforceScope,schema:{querystring:querySchema,body:{type:'object',required:['urgentCents','attentionCents','urgentDays','attentionDays'],additionalProperties:false,properties:{urgentCents:{type:'integer',minimum:0,maximum:100000000},attentionCents:{type:'integer',minimum:0,maximum:100000000},urgentDays:{type:'number',minimum:0,maximum:365},attentionDays:{type:'number',minimum:0,maximum:365}}}}},async(req,reply)=>{
   if(!boundScope)return reply.code(409).send({message:errorMessages.configuration});

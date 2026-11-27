@@ -35,6 +35,8 @@ No Atlas, mantenha liberadas as faixas de saída exibidas em **Connect → Outbo
 
 ### Atualização dos relatórios
 
+O cartão de orçamento consulta `account_budget` separadamente das campanhas: mostra a situação atual da conta, sem filtro histórico. Com o painel aberto, solicita atualização quando a última tentativa tem pelo menos 15 minutos, mesmo se o agendador global estiver desativado. O botão do próprio cartão permite consulta manual (mínimo 30 segundos); ambas respeitam `retry-after`, fila deduplicada e bloqueio do provedor Google. As requisições HTTP só enfileiram trabalho. Não é necessário ativar as coletas automáticas de outras integrações para manter esse cartão atualizado.
+
 - Google e Meta usam cache automático de uma hora e intervalo mínimo de dez minutos para atualização manual. Abrir filtros lê o Atlas; a coleta externa é enfileirada, deduplicada e acompanhada por consultas de status.
 - O botão **Atualizar dados** do Google agora solicita a coleta externa. Na Visão geral, **Atualizar painel** faz a mesma solicitação e relê os indicadores do CRM.
 - Google conserva a cobertura histórica. As coletas automáticas renovam os últimos 90 dias dentro dessa cobertura e intervalos ainda ausentes, sem sobrepor consultas. Uma atualização manual também inclui o período escolhido. O histórico completo é reconciliado semanalmente; a primeira execução após esta mudança faz uma revisão completa. Isso permite incorporar revisões tardias de conversões sem reconsultar todo o histórico em cada atualização.
