@@ -61,6 +61,6 @@ export function AuthGate({children}:{children:ReactNode}){
     <p className="login-access-note"><LockKeyhole size={13} aria-hidden="true"/>Acesso exclusivo à equipe JBR.</p>
    </div>
   </div>
-  <footer className="login-footer"><span>GRUPO JBR BRASIL</span><span>Relacionamento que gera movimento.</span></footer>
+  <footer className="login-footer"><span>GRUPO JBR BRASIL</span><span><a href="/privacidade.html">Privacidade</a> · <a href="/exclusao-de-dados.html">Exclusão de dados</a></span></footer>
  </main>;
 }
