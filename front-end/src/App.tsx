@@ -8,6 +8,9 @@ import { type Status, ConnectedConversations, ConnectedReports, ConnectedSetting
 import { Leads } from './Leads';
 import {AttendanceSyncProvider} from './AttendanceSync';
 import {SessionControl} from './Auth';
+import {MetaTraffic} from './MetaTraffic';
+import {GoogleAdsMark,MetaMark} from './Presentation';
+import {ChevronDown,ChevronRight} from 'lucide-react';
 import { PaidTraffic } from './PaidTraffic';
 import { FunnelOverview as ConnectedOverview } from './FunnelOverview';
 
@@ -93,10 +96,12 @@ function SettingsPage() {
 export function App() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const [trafficExpanded,setTrafficExpanded]=useState(location.pathname.startsWith('/trafego'));
+  const expanded=trafficExpanded;
   const status=useQuery({queryKey:['status'],queryFn:({signal})=>getJson<Status>('/status',signal),refetchInterval:60_000});
   if(status.isPending||status.error) return <QueryState isPending={status.isPending} error={status.error}>{null}</QueryState>;
   const live=['local','mongo'].includes(status.data?.mode??'');
   return <div className="shell"><button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>{open && <div className="scrim" onClick={() => setOpen(false)} />}
-    <aside className={`sidebar ${open ? 'open' : ''}`}><div className="brand"><img src="/jbr-logo-white.webp" alt="Grupo JBR Brasil" /><span className="brand-product">CRM <i/> JBR</span><button className="close-menu" onClick={() => setOpen(false)} aria-label="Fechar menu"><X /></button></div><nav aria-label="Menu principal">{nav.map(n => <NavLink key={n.to} to={n.to} end={n.to === '/'} onClick={() => setOpen(false)}><n.icon size={19} strokeWidth={1.8} /><span>{n.label}</span></NavLink>)}</nav><div className="sidebar-bottom"><SessionControl/></div></aside>
-    <main className="content" key={location.pathname}><AttendanceSyncProvider mode={status.data!.mode} enabled={['/','/conversas'].includes(location.pathname)}><Routes><Route path="/" element={live?<ConnectedOverview status={status.data!}/>:<OverviewPage />} /><Route path="/trafego" element={live?<PaidTraffic/>:<AdsPage />} /><Route path="/conversas" element={live?<ConnectedConversations status={status.data!}/>:<ConversationsPage />} /><Route path="/leads" element={live?<Leads status={status.data!}/>:<LeadsPage />} /><Route path="/relatorios" element={live?<ConnectedReports status={status.data!}/>:<ReportsPage />} /><Route path="/configuracoes" element={live?<ConnectedSettings status={status.data!}/>:<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></AttendanceSyncProvider></main></div>;
+    <aside className={`sidebar ${open ? 'open' : ''}`}><div className="brand"><img src="/jbr-logo-white.webp" alt="Grupo JBR Brasil" /><span className="brand-product">CRM <i/> JBR</span><button className="close-menu" onClick={() => setOpen(false)} aria-label="Fechar menu"><X /></button></div><nav aria-label="Menu principal">{nav.map(n => n.to==='/trafego'?<div key={n.to}><button className={'traffic-toggle '+(location.pathname.startsWith('/trafego')?'active':'')} aria-expanded={expanded} aria-controls="traffic-submenu" onClick={()=>setTrafficExpanded(!expanded)}><n.icon size={19}/><span>Tráfego pago</span>{expanded?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>{expanded&&<div className="traffic-submenu" id="traffic-submenu"><NavLink to="/trafego/google" onClick={()=>setOpen(false)}><GoogleAdsMark/><span>Google Ads</span></NavLink><NavLink to="/trafego/meta" onClick={()=>setOpen(false)}><MetaMark/><span>Meta Ads</span></NavLink></div>}</div>:<NavLink key={n.to} to={n.to} end={n.to === '/'} onClick={() => setOpen(false)}><n.icon size={19} strokeWidth={1.8} /><span>{n.label}</span></NavLink>)}</nav><div className="sidebar-bottom"><SessionControl/></div></aside>
+    <main className="content" key={location.pathname}><AttendanceSyncProvider mode={status.data!.mode} enabled={['/','/conversas'].includes(location.pathname)}><Routes><Route path="/" element={live?<ConnectedOverview status={status.data!}/>:<OverviewPage />} /><Route path="/trafego" element={<Navigate to="/trafego/google" replace/>} /><Route path="/trafego/google" element={live?<PaidTraffic/>:<AdsPage />} /><Route path="/trafego/meta" element={<MetaTraffic enabled={status.data!.mode==='mongo'}/>} /><Route path="/conversas" element={live?<ConnectedConversations status={status.data!}/>:<ConversationsPage />} /><Route path="/leads" element={live?<Leads status={status.data!}/>:<LeadsPage />} /><Route path="/relatorios" element={live?<ConnectedReports status={status.data!}/>:<ReportsPage />} /><Route path="/configuracoes" element={live?<ConnectedSettings status={status.data!}/>:<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></AttendanceSyncProvider></main></div>;
 }

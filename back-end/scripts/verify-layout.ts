@@ -8,7 +8,7 @@ process.env.SERVE_WEB='true';
 const app=buildApp({mode:'demo'});
 try {
   const html=await readFile(new URL('../../front-end/dist/index.html',import.meta.url),'utf8');
-  const pages=['/','/trafego','/conversas','/leads','/relatorios','/configuracoes','/leads?chat=sample'];
+  const pages=['/','/trafego','/trafego/google','/trafego/meta','/conversas','/leads','/relatorios','/configuracoes','/leads?chat=sample'];
   for(const url of pages){
     const response=await app.inject(url);
     assert.equal(response.statusCode,200,url);
@@ -36,7 +36,7 @@ try {
     const response=await app.inject(url);
     assert.equal(response.body,html,'Private source must not be served: '+url);
   }
-  console.log('Layout verificado: 7 URLs de páginas, assets compilados/públicos, APIs JSON e fallback 404 de API preservados.');
+  console.log('Layout verificado: 9 URLs de páginas, assets compilados/públicos, APIs JSON e fallback 404 de API preservados.');
 } finally {
   await app.close();
   if(previous===undefined)delete process.env.SERVE_WEB;else process.env.SERVE_WEB=previous;

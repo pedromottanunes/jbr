@@ -1,3 +1,4 @@
+import {registerMeta} from './meta.js';
 import type {FastifyInstance} from 'fastify';
 import type {MongoContext} from './connection.js';
 import {MongoReads,viewGeneration} from './datasets.js';
@@ -21,6 +22,7 @@ const escape=(v:string)=>v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const project={_id:0,generation:0,search:0};
 const pageSchema={type:'object',additionalProperties:false,properties:{q:{type:'string',maxLength:100},cursor:{type:'integer',minimum:0,maximum:1000000},limit:{type:'integer',minimum:1,maximum:100}}};
 export function registerMongoData(app:FastifyInstance,ctx:MongoContext){
+ registerMeta(app,ctx);
  const read=new MongoReads(ctx),settings=new MongoSettings(ctx),ads=()=>read.ads();
  const config=async()=>(await settings.attendance()).config;
  const requestJob=async(kind:'google'|'umbler'|'budget',payload:Record<string,unknown>)=>{

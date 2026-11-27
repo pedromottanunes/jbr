@@ -37,7 +37,8 @@ it('fails closed in production if credentials or the HTTPS origin are missing',(
 it('requires authentication on CRM reads and mutations while keeping health and readiness accessible',async()=>{
  const {app}=setup();
  try{
-  for(const url of ['/api/v1/status','/api/v1/overview','/api/v1/ads','/api/v1/leads','/api/v1/contacts','/api/v1/conversations','/api/v1/settings/message-storage'])expect((await app.inject(url)).statusCode,url).toBe(401);
+  for(const url of ['/api/v1/status','/api/v1/overview','/api/v1/ads','/api/v1/leads','/api/v1/contacts','/api/v1/conversations','/api/v1/settings/message-storage','/api/v1/meta/detail?start=2026-11-01&end=2026-11-02','/api/v1/meta/sync'])expect((await app.inject(url)).statusCode,url).toBe(401);
+  expect((await app.inject({method:'POST',url:'/api/v1/meta/sync',headers:{origin},payload:{start:'2026-11-01',end:'2026-11-02'}})).statusCode).toBe(401);
   expect((await app.inject({method:'POST',url:'/api/v1/attendance/ensure',headers:{origin},payload:{start:'2026-11-01',end:'2026-11-02'}})).statusCode).toBe(401);
   expect((await app.inject('/api/health')).statusCode).toBe(200);
   expect((await app.inject('/api/ready')).statusCode).toBe(200);

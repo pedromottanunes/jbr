@@ -1,8 +1,9 @@
 import type {MongoContext} from './connection.js';
 import {validPeriod, type Period} from '../../../shared/period.js';
 import {mergeAttendancePeriods,subtractPeriods,umblerPeriods,missingAttendancePeriods,periodDays} from './attendance-period.js';
+import {mergeMetaPeriods} from '../../../shared/meta.js';
 
-export type JobKind = 'google' | 'umbler' | 'budget';
+export type JobKind = 'google' | 'umbler' | 'budget' | 'meta';
 const active = (status: string) => status === 'queued' || status === 'running';
 export function mergePeriods(...values: any[]): Period | undefined {
   const periods = values.filter(p => p?.start && p?.end) as Period[];
@@ -31,6 +32,14 @@ export async function enqueue(ctx: MongoContext, kind: JobKind, payload: Record<
       await ctx.transaction(async session => {
         const jobs = ctx.collection('sync_jobs'), r = await jobs.findOne({_id: kind}, {session}), now = new Date();
         let requested=payload;
+        if(kind==='meta'){
+          const periods=mergeMetaPeriods((payload.periods??[]) as Period[]);if(!periods.length)throw new Error('Período Meta ausente.');
+          requested={periods};
+          if(r&&active(r.status)){
+            const merged=mergeMetaPeriods(r.payload.periods,periods);
+            await jobs.updateOne({_id:kind},{$set:{'payload.periods':merged}},{session});return;
+          }
+        }
         if(kind==='umbler'){
           let periods=umblerPeriods(payload,now);
           if(payload.automatic){
@@ -71,6 +80,10 @@ export async function completeJob(ctx: MongoContext, id: string, owner: string, 
     const jobs = ctx.collection('sync_jobs');
     const r = await jobs.findOne({_id: id, owner, status: 'running', leaseUntil: {$gt: new Date()}}, {session});
     if (!r) throw new Error('Posse da tarefa expirada.');
+    if(r.kind==='meta'){
+      const remaining=r.payload.periods.slice(1);
+      await jobs.updateOne({_id:id,owner},{$set:{status:remaining.length?'queued':'complete',completedAt:new Date(),publishedAt:new Date(),availableAt:new Date(Date.now()+30000),attempts:0,message:null,'payload.periods':remaining},$unset:{owner:'',leaseUntil:''}},{session});return;
+    }
     if(r.kind==='umbler'){
       const partial=result?.status==='partial',current=umblerPeriods(r.payload,r.requestedAt),remaining=partial?current:current.slice(1);
       // Keep the current interval stable while its discovery/history pages resume.

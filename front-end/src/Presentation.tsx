@@ -9,6 +9,7 @@ import {tagCategory} from '../../shared/lead-tags';
 export function GoogleAdsMark() {
   return <img className="google-ads-mark" src="/google-ads.svg" alt="" aria-hidden="true" width="28" height="28"/>;
 }
+export function MetaMark(){return <svg className="meta-mark" viewBox="0 0 32 24" fill="none" aria-hidden="true"><path d="M3 15.5C3 8 6 3 9.3 3c4.4 0 8.2 10.8 11.4 15.1 1.1 1.5 2.2 2 3.4 2 2.9 0 4.9-2.1 4.9-5.9C29 7.9 26.2 3 22.8 3 18 3 14.1 14.4 11 18.4c-1.1 1.4-2.2 1.9-3.6 1.9C4.7 20.3 3 18.5 3 15.5Z" stroke="currentColor" strokeWidth="3.3" strokeLinecap="round" strokeLinejoin="round"/></svg>;}
 
 const normalize=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toUpperCase().trim();
 

@@ -1,3 +1,4 @@
+import {collectMeta} from './meta.js';
 import {randomUUID} from 'node:crypto';
 import type {MongoContext} from './connection.js';
 import {completeJob,enqueue,type JobKind} from './jobs.js';
@@ -26,7 +27,7 @@ export async function runWorkerOnce(ctx:MongoContext,signal?:AbortSignal){
   await ctx.collection('sync_jobs').updateMany({status:'running',attempts:{$gte:3},leaseUntil:{$lte:new Date()}},{$set:{status:'error',completedAt:new Date(),availableAt:new Date(Date.now()+300000),message:'Coleta interrompida após três tentativas. Dados publicados preservados.'},$unset:{owner:'',leaseUntil:''}});
   await ctx.collection('sync_jobs').updateMany({status:'running',attempts:{$lt:3},leaseUntil:{$lte:new Date()}},{$set:{status:'queued',availableAt:new Date(),message:'Retomando coleta interrompida.'},$unset:{owner:'',leaseUntil:''}});
   job=await ctx.collection('sync_jobs').findOneAndUpdate({status:'queued',availableAt:{$lte:new Date()}},{$set:{status:'running',owner,startedAt:new Date(),leaseUntil:new Date(Date.now()+120000)},$inc:{attempts:1}},{sort:{requestedAt:1},returnDocument:'after'});
-  if(!job)return false;resource=job.kind==='umbler'?'umbler':'google';
+  if(!job)return false;resource=job.kind==='umbler'?'umbler':job.kind==='meta'?'meta':'google';
   if(!await ctx.lease(resource,120000,owner)){await ctx.collection('sync_jobs').updateOne({_id:job._id,owner},{$set:{status:'queued',availableAt:new Date(Date.now()+5000)},$inc:{attempts:-1},$unset:{owner:'',leaseUntil:''}});return false;}
   let lost=false,renewing=false;const keep=async()=>{if(renewing)return;renewing=true;try{if(!await ctx.renew('worker',owner)||!await ctx.renew(resource!,owner)){lost=true;return;}const result=await ctx.collection('sync_jobs').updateOne({_id:job._id,owner,status:'running',leaseUntil:{$gt:new Date()}},{$set:{leaseUntil:new Date(Date.now()+120000)}});if(!result.matchedCount)lost=true;}finally{renewing=false;}};
   timer=setInterval(()=>{void keep().catch(()=>{lost=true;});},20000);
@@ -39,6 +40,7 @@ export async function runWorkerOnce(ctx:MongoContext,signal?:AbortSignal){
    // Recover a crash after publication/coverage commit without rereading Umbler.
    result=saved===days.length?{status:'complete'}:await collectUmbler(ctx,owner,Number(job.payload?.days??90),Number(job.payload?.maxRequests??150),{signal,period,cycle:job.requestedAt.toISOString()});
   }
+  else if(job.kind==='meta'){await collectMeta(ctx,job.payload.periods[0],guard,signal);}
   else{
    const reader=new GoogleAdsReader({tokenProvider:mongoGoogleTokens(ctx),version:process.env.GOOGLE_ADS_API_VERSION||'v26',loginCustomerId:process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID,developerToken:process.env.GOOGLE_ADS_DEVELOPER_TOKEN},new PersistentReadGate(ctx,'google',1000,guard,fetch,signal),ms=>pause(ms,signal));
    if(job.kind==='google'){const data=await collectGoogle(reader,process.env.GOOGLE_ADS_CUSTOMER_ID??'',job.payload?.start?job.payload:undefined,await new MongoReads(ctx).adsHeader());await guard();await publishAds(ctx,data,owner,signal);}

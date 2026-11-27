@@ -1,6 +1,8 @@
 # CRM JBR
 
-CRM para acompanhar aquisição, leads e atendimento da JBR. Integra Google Ads e leitura de conversas do Umbler Talk, com persistência no MongoDB Atlas, identificação dos CTAs do site, indicadores por atendente e orçamento de conta consultado na API. Não envia mensagens pelo WhatsApp.
+CRM para acompanhar aquisição, leads e atendimento da JBR. Integra Google Ads, Meta Ads e leitura de conversas do Umbler Talk, com persistência no MongoDB Atlas, identificação dos CTAs do site, indicadores por atendente e orçamento de conta consultado na API. Não envia mensagens pelo WhatsApp.
+
+O menu **Tráfego pago** expande Google Ads e Meta Ads. O painel Meta usa as três contas autorizadas da JBR, com campanhas, conjuntos, anúncios e conteúdos patrocinados no Instagram. A coleta acontece no backend, pela fila existente, com cache limitado no Atlas e credencial criptografada. Consulte [Integração Meta](META-INTEGRACAO.md) para regras das métricas, limites e operação. `/trafego` continua funcionando e redireciona para `/trafego/google`; a nova área usa `/trafego/meta`.
 
 ## Organização do código
 
