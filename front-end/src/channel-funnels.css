@@ -1,0 +1,74 @@
+.channel-funnels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;align-items:stretch}
+.funnel-overview .channel-funnel{--channel-color:#107b78;position:relative;display:flex;flex-direction:column;min-width:0;padding:18px 20px 12px;border:1px solid #dbe5f1;border-radius:14px;background:linear-gradient(150deg,#f5fafc 0,#fff 40%);box-shadow:0 4px 18px #152b5005;overflow:hidden}
+.channel-funnel:before{content:'';height:3px;position:absolute;inset:0 0 auto;background:linear-gradient(90deg,#2764c8,#079c8a,#e2c526)}
+.funnel-overview .channel-meta{--channel-color:#5c4bc7;background:linear-gradient(150deg,#f6f6ff 0,#fff 40%)}
+.channel-meta:before{background:linear-gradient(90deg,#2385df,#6650cc,#b751a5)}
+.channel-funnel-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:34px}
+.channel-funnel .channel-funnel-heading h2{display:flex;align-items:center;gap:9px;margin:0;font-size:17px;white-space:nowrap;letter-spacing:-.025em}
+.channel-funnel-heading .meta-mark{width:27px;height:22px;color:#1877f2;flex-shrink:0}
+.channel-funnel-heading .google-ads-mark{width:26px;height:26px}
+.channel-funnel .channel-rule{display:flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid #cce8df;border-radius:6px;background:#edf8f3;color:#126e54;font-size:10px;font-weight:650;white-space:nowrap}
+.funnel-overview .channel-funnel-heading select{width:180px;min-width:0;max-width:48%;font-size:11px;min-height:32px;padding:6px 8px;border-color:#d9deef;border-radius:6px}
+.channel-journey{display:flex;align-items:center;gap:5px;min-height:36px;padding:5px 0 9px;color:#687b96;font-size:10px;flex-wrap:wrap}
+.channel-journey>svg{color:#9daec3}
+.channel-update{display:inline-flex;align-items:center;gap:4px;margin-left:auto;font-size:9px;color:var(--channel-color)}
+.channel-update.has-error{color:#a64716}
+.channel-steps{display:grid;grid-auto-rows:1fr;flex:1;gap:5px;padding:0 0 4px;margin:0;list-style:none;min-height:250px}
+.channel-steps>li{--step-from:#2455ac;--step-to:#2e71be;position:relative;display:flex;align-items:stretch;gap:8px;min-width:0;animation:channel-enter 450ms both;animation-delay:calc(var(--step-order)*65ms)}
+.channel-google .channel-steps>li:nth-child(2){--step-from:#087d9c;--step-to:#087c91}
+.channel-google .channel-steps>li:nth-child(3){--step-from:#087f78;--step-to:#128371}
+.channel-google .channel-steps>li:nth-child(4){--step-from:#177a55;--step-to:#268354}
+.channel-meta .channel-steps>li:nth-child(2){--step-from:#2269bc;--step-to:#3074c4}
+.channel-meta .channel-steps>li:nth-child(3){--step-from:#534bb3;--step-to:#7166c5}
+.channel-meta .channel-steps>li:nth-child(4){--step-from:#7043ad;--step-to:#8653b6}
+.channel-meta .channel-steps>li:nth-child(5){--step-from:#96418a;--step-to:#a05093}
+.channel-step-index{position:relative;display:grid;place-items:center;flex:0 0 22px;font-variant-numeric:tabular-nums;font-weight:650;font-size:10px;color:#7b8ca7}
+.channel-step-index:after{content:'';position:absolute;bottom:-5px;left:10px;height:7px;width:1px;background:#c7d6e8}
+.channel-steps>li:last-child .channel-step-index:after{display:none}
+.channel-step{position:relative;isolation:isolate;display:flex;align-items:center;gap:9px;min-width:0;min-height:46px;margin:0 auto;width:calc(100% - 30px - var(--step-inset));padding:7px 22px;color:#fff;transition:filter 200ms,transform 200ms}
+.channel-step:before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,var(--step-from),var(--step-to));clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,10px 100%);border-radius:4px}
+.channel-step:hover{filter:brightness(1.07);transform:translateY(-1px)}
+.channel-step-icon{flex:0 0 auto;opacity:.88}
+.channel-step-label{min-width:0;line-height:1.25}
+.channel-step-label>span{display:block;font-size:12px;font-weight:650}
+.channel-step-label small{display:block;font-size:9px;margin-top:3px;opacity:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+.channel-step strong{margin-left:auto;padding-left:6px;font-size:21px;line-height:1.15;font-weight:750;letter-spacing:-.035em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.channel-step.is-unavailable:before{background:linear-gradient(105deg,#e9eef5,#f3f5f9)}
+.channel-step.is-unavailable{color:#63738b}
+.channel-step.is-unavailable .channel-step-label small{opacity:1;color:#70819c}
+.channel-value{animation:channel-number 380ms both}
+.channel-value.is-loading{animation:none}
+.channel-skeleton{display:block;width:45px;height:18px;border-radius:4px;background:linear-gradient(90deg,#c8d4e4 25%,#e6edf6 50%,#c8d4e4 75%);background-size:200% 100%;animation:channel-shimmer 1.3s ease-in-out infinite}
+.channel-funnel .channel-sale{position:relative;display:flex;align-items:center;gap:11px;margin:14px 0 10px;padding:12px 13px;min-height:67px;background:linear-gradient(110deg,#eef8ed,#f7fbec);border:1px solid #cfe5cd;border-radius:9px;color:#215c3f}
+.channel-sale-connector{position:absolute;left:50%;top:-15px;height:14px;display:flex;align-items:center;color:#91a9a2}
+.channel-sale-icon{display:grid;place-items:center;flex:0 0 33px;height:33px;border-radius:9px;color:#956615;background:#f6edc8}
+.channel-sale>div{min-width:0}
+.channel-sale b{font-size:13px;font-weight:700}
+.channel-sale b span{font-size:10px;font-weight:500;color:#537563}
+.channel-sale small{display:block;font-size:9px;line-height:1.4;margin-top:4px;color:#537563}
+.channel-sale strong{margin-left:auto;font-size:27px;font-weight:750;letter-spacing:-.035em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.channel-funnel .channel-sale.is-unavailable{background:#f8f9fc;border-color:#e2e7f0;color:#77869c}
+.channel-sale.is-unavailable .channel-sale-icon{background:#eef1f7;color:#7b8ba2}
+.channel-sale.is-unavailable small,.channel-sale.is-unavailable b span{color:#72819a}
+.channel-method{font-size:11px;color:#586e8b}
+.channel-method>summary{display:flex;align-items:center;gap:5px;width:fit-content;max-width:100%;padding:3px 0;cursor:pointer;list-style:none}
+.channel-method>summary::-webkit-details-marker{display:none}
+.channel-method>summary svg:last-child{transition:transform 150ms}
+.channel-method[open]>summary svg:last-child{transform:rotate(180deg)}
+.channel-method>summary:hover{color:#2259a4}
+.channel-method>summary:focus-visible,.channel-funnel select:focus-visible{outline:2px solid #377ce3;outline-offset:4px;border-radius:3px}
+.channel-method-content{padding-top:7px;line-height:1.65}
+.channel-method-content dl{margin:0}
+.channel-method-content dl>div{margin:8px 0}
+.channel-method-content dt{font-weight:700;color:#314c6f}
+.channel-method-content dd{margin:2px 0 0}
+.channel-method-content p{margin:10px 0 0}
+.channel-spinner{animation:channel-spin 1s linear infinite}
+@keyframes channel-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes channel-number{from{opacity:.45;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+@keyframes channel-shimmer{to{background-position:-200% 0}}
+@keyframes channel-spin{to{transform:rotate(360deg)}}
+@media(max-width:1150px){.funnel-overview .channel-funnel{padding:16px 14px 12px}.channel-funnel-heading h2{font-size:16px}.channel-rule svg{display:none}.channel-step{gap:6px;padding:7px 17px}.channel-step-label>span{font-size:11px}.channel-step strong{font-size:19px}.channel-step-icon{width:15px}.channel-journey .channel-update{font-size:9px}.channel-step-label small{max-width:160px}}
+@media(max-width:850px){.channel-funnels{grid-template-columns:1fr}.channel-steps{min-height:240px}.channel-step-label>span{font-size:12px}.channel-step strong{font-size:22px}.channel-step-label small{max-width:240px}}
+@media(max-width:430px){.channel-funnel-heading h2{font-size:15px}.channel-funnel .channel-rule{font-size:9px;padding:5px}.channel-journey{font-size:9px}.channel-step{padding:7px 15px;gap:6px;width:calc(100% - 30px - var(--step-inset)*.6)}.channel-step-icon{display:none}.channel-step-label>span{font-size:11px}.channel-step-label small{max-width:150px}.channel-step strong{font-size:20px}.channel-update{font-size:8px}.channel-sale b{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.channel-funnels *,.channel-funnels *:before{animation:none!important;transition:none!important;transform:none!important}}

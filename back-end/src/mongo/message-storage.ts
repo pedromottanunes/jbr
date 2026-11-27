@@ -13,6 +13,9 @@ const pick=(value:any,keys:string[])=>Object.fromEntries(keys.filter(k=>scalar(v
 export const providerText=(raw:any)=>['headerContent','content','footer'].filter(k=>typeof raw?.[k]==='string'&&raw[k]).map(k=>raw[k]).join('\n');
 const reference=(m:any)=>pick(m,['id','eventAtUTC']);
 const tags=(items:any)=>Array.isArray(items)?items.map(t=>pick(t,['id','name'])):[];
+export const adAttributionVersion=1;
+// Preserve only an ad identifier, never the click token, URL, creative or text.
+export function analyzedFirstMessage(raw:any){const value=String(raw.ad?.sourceId??'');return {...raw,adAttributionVersion,adSourceId:/^\d{1,40}$/.test(value)?value:null};}
 function chatFacts(raw:any){
  return {...pick(raw,['id','_t','createdAtUTC','eventAtUTC','open','closedAtUTC']),
   contact:{...pick(raw.contact,['id','name','phoneNumber','contactType']),tags:tags(raw.contact?.tags)},tags:tags(raw.tags),
@@ -23,7 +26,7 @@ function chatFacts(raw:any){
 }
 export function messageFacts(row:any){
  return {...pick(row,['_id','generation','id','messageId','chat_id','contactId','at','incoming','private','source','attendanceSource','kind','author']),
-  ctaKey:extractCtaKey(row),contentStored:false};
+  ctaKey:extractCtaKey(row),...pick(row,['adSourceId','adAttributionVersion']),contentStored:false};
 }
 // Allowlisted envelopes prevent text, captions, attachments, quoted messages,
 // internal notes and nested first/last-message previews from reaching storage.
@@ -38,6 +41,7 @@ export function sourceFacts(table:string,row:any,storeContent=false){
   ...pick(raw,['source','messageType','messageState','isPrivate']),
   scheduledMessage:!!raw.scheduledMessage,bulkSendSession:!!raw.bulkSendSession,
   sentByOrganizationMember:pick(raw.sentByOrganizationMember,['id','name']),
+  ...pick(raw,['adSourceId','adAttributionVersion']),
   ctaKey:extractCtaKey({content:providerText(raw),...(raw.ctaKey!==undefined?{ctaKey:raw.ctaKey}:{})}),
   ...(raw.ctaKey===undefined?{ctaCatalogVersion}:raw.ctaCatalogVersion?{ctaCatalogVersion:raw.ctaCatalogVersion}:{}),
  };

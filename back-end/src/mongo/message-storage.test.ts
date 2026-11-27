@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {sourceFacts,messageFacts} from './message-storage';
+import {sourceFacts,messageFacts,analyzedFirstMessage} from './message-storage';
 import {normalizeSource} from './datasets';
 import {buildViews,analytics} from './model';
 import {ctaTexts,extractCtaKey,ctaRecordFor,ctaCatalogVersion,needsCtaRefresh} from '../cta';
@@ -61,5 +61,18 @@ describe('message retention',()=>{
    const clean=sourceFacts(name,{id:'fixture',raw:{content:secret,headerContent:secret,footer:secret,comment:secret,rating:{comment:secret},attachments:[{content:secret}],firstContactMessage:{content:secret},lastMessage:{content:secret},organizationMemberHistory:[{firstMemberReplyMessage:{content:secret}}],timeline:[{note:secret}]}});
    expect(JSON.stringify(clean)).not.toContain(secret);
   }
+ });
+ it('counts observed sale labels by the first message ad while discarding message and ad contents',()=>{
+  const rows=fixture();
+  (rows.chats[0].raw.contact as any).tags=[{name:'VENDA OK'}];
+  rows.messages[0].raw=analyzedFirstMessage({...rows.messages[0].raw,ad:{sourceId:'123456',ctWaCLId:secret,title:secret}});
+  const clean=Object.fromEntries(Object.entries(rows).map(([name,items])=>[name,items.map(r=>sourceFacts(name,r))]));
+  expect(JSON.stringify(clean)).not.toContain(secret);expect(JSON.stringify(clean)).not.toContain(ctaTexts()[0]);
+  expect(clean.messages[0].raw.adSourceId).toBe('123456');
+  const report=metrics(buildViews(normalizeSource(clean))).funnel;
+  expect(report.metrics.site).toBe(1);expect(report.metrics.siteAttended).toBe(1);expect(report.metrics.siteWonObserved).toBe(1);
+  // A CTA opening wins over ad metadata under JBR's Google classification rule.
+  expect(report.metaAdCohorts).toEqual([]);
+  expect(analyzedFirstMessage({ad:{sourceId:'not-a-numeric-id'}}).adSourceId).toBeNull();
  });
 });

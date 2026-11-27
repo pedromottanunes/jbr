@@ -11,6 +11,7 @@ import {collectionWindow} from './collection-window.js';
 import type {Period} from '../../../shared/period.js';
 import {periodBounds,periodCollectionWindow} from './attendance-period.js';
 import {markAttendanceCoverage} from './attendance-coverage.js';
+import {adAttributionVersion,analyzedFirstMessage} from './message-storage.js';
 
 const stamp=(value:string)=>{const d=new Date(value);if(!Number.isFinite(+d))throw new Error('Data de evento inválida.');return d.toISOString();};
 const id=(v:unknown)=>{if(typeof v!=='string'||!/^[-\w]+$/.test(v))throw new Error('Identidade Umbler inválida.');return v;};
@@ -74,7 +75,7 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
   // for CTA, without marking the intervening history as covered. This subtask
   // shares the request budget and leaves most calls for attendance events.
   const references=candidates.filter(c=>c.raw.firstContactMessage?.id);
-  const known=new Set((await ctx.collection('umbler_messages').find({organization_id:org,id:{$in:references.map(c=>c.raw.firstContactMessage.id)}},{projection:{chat_id:1,id:1,'raw.ctaKey':1,'raw.ctaCatalogVersion':1}}).maxTimeMS(15000).toArray()).filter(m=>!needsCtaRefresh(m.raw??{})).map(m=>m.chat_id+':'+m.id));
+  const known=new Set((await ctx.collection('umbler_messages').find({organization_id:org,id:{$in:references.map(c=>c.raw.firstContactMessage.id)}},{projection:{chat_id:1,id:1,'raw.ctaKey':1,'raw.ctaCatalogVersion':1,'raw.adAttributionVersion':1}}).maxTimeMS(15000).toArray()).filter(m=>m.raw?.adAttributionVersion===adAttributionVersion&&!needsCtaRefresh(m.raw??{})).map(m=>m.chat_id+':'+m.id));
   const checks=new Map((await ctx.collection('umbler_first_message_checks').find(scopeFilter).maxTimeMS(15000).toArray()).map(r=>[r.chat_id,r]));
   let firstRequests=0;
   const firstLimit=candidates.some(c=>windowFor(c,byChat.get(c.id)))?Math.max(1,Math.floor(maxRequests/3)):maxRequests;
@@ -87,7 +88,7 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
    try{
     const message=await get('/v1/messages/'+id(ref.id)+'/',{organizationId:org});
     if(message.id!==ref.id||message.source!=='Contact'||message.isPrivate||(message.chat?.id&&message.chat.id!==c.id)||!['MessageModel','SentMessageModel'].includes(message._t)||stamp(message.eventAtUTC)!==stamp(ref.eventAtUTC))throw new Error('Primeira mensagem divergente.');
-    sourceRow(batch,'messages',['organization_id','chat_id','id'],{organization_id:org,chat_id:c.id,id:message.id,event_at_utc:stamp(message.eventAtUTC),raw:message});
+    sourceRow(batch,'messages',['organization_id','chat_id','id'],{organization_id:org,chat_id:c.id,id:message.id,event_at_utc:stamp(message.eventAtUTC),raw:analyzedFirstMessage(message)});
    }catch(error){if(!(error instanceof ProviderReadError)||![404,410].includes(error.status))throw error;status='unavailable';}
    const checked={organization_id:org,chat_id:c.id,message_id:ref.id,status,checked_at:now,ctaCatalogVersion,retry_at:status==='unavailable'?new Date(Date.parse(now)+7*86400000).toISOString():null};
    sourceRow(batch,'first_message_checks',['organization_id','chat_id'],checked);
@@ -108,7 +109,7 @@ export async function collectUmbler(ctx:MongoContext,owner:string,days=90,maxReq
     if(entries.length&&next>=cursor&&!complete)throw new Error('Página sem desempate temporal.');
     // Validate the complete page before recording any cursor.
     if(entries.some((m:any)=>!String(m._t??'').endsWith('MetadataModel')&&!['MessageModel','SentMessageModel'].includes(m._t)))throw new Error('Tipo de evento desconhecido.');
-    const batch:SourceBatch={};for(const item of entries){const kind=item._t,at=stamp(item.eventAtUTC);if(period&&(at<lower||at>=upper))continue;sourceRow(batch,kind.endsWith('MetadataModel')?'service_events':'messages',['organization_id','chat_id','id'],{organization_id:org,chat_id:c.id,id:item.id,...(kind.endsWith('MetadataModel')?{at,kind}:{event_at_utc:at}),raw:item});}
+    const batch:SourceBatch={};for(const item of entries){const kind=item._t,at=stamp(item.eventAtUTC);if(period&&(at<lower||at>=upper))continue;const raw=item.id===c.raw.firstContactMessage?.id&&item.source==='Contact'?analyzedFirstMessage(item):item;sourceRow(batch,kind.endsWith('MetadataModel')?'service_events':'messages',['organization_id','chat_id','id'],{organization_id:org,chat_id:c.id,id:item.id,...(kind.endsWith('MetadataModel')?{at,kind}:{event_at_utc:at}),raw});}
     const covered=complete&&!limited?lower:entries.length?oldest:window.earliest;
     const checkpoint={organization_id:org,chat_id:c.id,cursor:next,until_utc:window.latest,page_upper_utc:upper,from_utc:lower,covered_from_utc:window.earliest&&(!covered||window.earliest<covered)?window.earliest:covered,complete:+complete,limited:+(limited||!!p?.unavailable_before_utc),unavailable_before_utc:limited&&complete?(entries.length?oldest:upper):p?.unavailable_before_utc};
     sourceRow(batch,'service_progress',['organization_id','chat_id'],checkpoint);

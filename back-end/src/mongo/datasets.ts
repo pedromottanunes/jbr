@@ -39,7 +39,7 @@ export async function loadSourceRows(ctx:MongoContext):Promise<Rows>{
  const chatFields=['organization_id','id','observed_at','service_candidate','raw.contact.id','raw.contact.name','raw.contact.phoneNumber','raw.contact.contactType','raw.contact.tags','raw.tags','raw.firstContactMessage.eventAtUTC','raw.lastMessage.eventAtUTC','raw.createdAtUTC','raw.open','raw.closedAtUTC','raw.organizationMemberHistory.memberId','raw.organizationMemberHistory.enteredAt','raw.organizationMemberHistory.firstMemberReplyMessage.id','raw.timeline'];
  const fields:Record<string,string[]>={
   chats:chatFields,
-  messages:['organization_id','chat_id','id','event_at_utc','contentStored','raw.ctaKey','raw.source','raw.sentByOrganizationMember.id','raw.sentByOrganizationMember.name','raw.messageType','raw.messageState','raw.isPrivate','raw.scheduledMessage','raw.bulkSendSession','raw.headerContent','raw.content','raw.footer'],
+  messages:['organization_id','chat_id','id','event_at_utc','contentStored','raw.ctaKey','raw.adSourceId','raw.adAttributionVersion','raw.source','raw.sentByOrganizationMember.id','raw.sentByOrganizationMember.name','raw.messageType','raw.messageState','raw.isPrivate','raw.scheduledMessage','raw.bulkSendSession','raw.headerContent','raw.content','raw.footer'],
   chat_sync:['organization_id','chat_id','backfill_complete','history_limited'],
   crm_members:['organization_id','id','name','kind','active'],
   service_events:['organization_id','chat_id','id','at','kind','raw.author.agentId','raw.previousMemberId','raw.newMemberId'],
@@ -177,7 +177,7 @@ export class MongoReads {
  async analytics(){
   const r=await this.revision(),policy=await messageStorage(this.ctx),names=['contacts','conversations','messages'],generation=names.map(n=>viewGeneration(r,n)).join(':')+':'+r.privacyVersion+':'+policy.storeContent;
   if(this.analyticsCache?.generation!==generation){
-   const projections=[{id:1,label:1,phone:1,first_inbound_at:1,source:1,tags:1},{id:1,entry:1,limited:1},{contactId:1,chat_id:1,messageId:1,at:1,incoming:1,content:1,ctaKey:1,source:1,attendanceSource:1}];
+   const projections=[{id:1,label:1,phone:1,first_inbound_at:1,source:1,tags:1},{id:1,entry:1,limited:1},{contactId:1,chat_id:1,messageId:1,at:1,incoming:1,content:1,ctaKey:1,adSourceId:1,adAttributionVersion:1,source:1,attendanceSource:1}];
    const data=Promise.all(names.map((name,i)=>this.ctx.collection(name).find({generation:viewGeneration(r,name),...(name==='messages'?{private:0}:{})},{projection:{_id:0,...projections[i]}}).maxTimeMS(15000).toArray())).then(async([contacts,chats,messages])=>{
     const {analytics}=await import('./model.js');return analytics(contacts,chats,messages,policy.storeContent);
    });this.analyticsCache={generation,data};data.catch(()=>{if(this.analyticsCache?.data===data)this.analyticsCache=undefined;});

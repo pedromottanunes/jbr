@@ -26,7 +26,7 @@ export function buildViews(rows:Rows,storeContent=false){
   const raw=rawMessages.get(r.chat_id+':'+r.id)??{},source=raw.source??null;
   const automated=raw.scheduledMessage||raw.bulkSendSession||['Failed','Error','Processing','Retrying','Submitted','Deleted','Redacted'].includes(raw.messageState)||['Reaction','CallAttempt'].includes(raw.messageType);
   const memberId=r.chat_id.split(':')[0]+':'+raw.sentByOrganizationMember?.id;
-  const item={...r,id:r.chat_id+':'+r.id,messageId:r.id,contactId:byChat.get(r.chat_id)?.contact_id??null,ctaKey:extractCtaKey({...r,...(raw.ctaKey!==undefined?{ctaKey:raw.ctaKey}:{})}),source,attendanceSource:source==='Member'&&(automated||(hasRoster&&!humans.has(memberId)))?null:source};
+  const item={...r,id:r.chat_id+':'+r.id,messageId:r.id,contactId:byChat.get(r.chat_id)?.contact_id??null,ctaKey:extractCtaKey({...r,...(raw.ctaKey!==undefined?{ctaKey:raw.ctaKey}:{})}),...(raw.adAttributionVersion?{adAttributionVersion:raw.adAttributionVersion,adSourceId:raw.adSourceId??null}:{}),source,attendanceSource:source==='Member'&&(automated||(hasRoster&&!humans.has(memberId)))?null:source};
   return storeContent&&r.contentStored!==false?{...item,contentStored:true}:messageFacts(item);
  });
  for(const c of contacts){c.tags.sort((a:any,b:any)=>a.name.localeCompare(b.name,'pt-BR'));c.search=normalize(c.label+' '+(c.phone??''));}
@@ -39,7 +39,8 @@ export function buildViews(rows:Rows,storeContent=false){
 export function normalize(value:string){return value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR');}
 export function analytics(contacts:any[],chats:any[],messages:any[],storeContent=false){
  const visible=messages.filter(m=>!m.private);
- const leadMessages=visible.map(m=>({contactId:m.contactId,chatId:m.chat_id,id:m.messageId,at:m.at,incoming:m.incoming,...(storeContent&&m.content!==undefined?{content:m.content}:{}),ctaKey:extractCtaKey(m),source:m.source}));
+ const entries=new Map(chats.map(c=>[c.id,c.entry]));
+ const leadMessages=visible.map(m=>({contactId:m.contactId,chatId:m.chat_id,id:m.messageId,at:m.at,incoming:m.incoming,firstInChat:!!m.incoming&&!!entries.get(m.chat_id)&&Date.parse(m.at)===Date.parse(entries.get(m.chat_id)),...(storeContent&&m.content!==undefined?{content:m.content}:{}),ctaKey:extractCtaKey(m),adSourceId:m.adSourceId??null,adAttributionVersion:m.adAttributionVersion??0,source:m.source,humanSource:m.attendanceSource}));
  const conversations:Conversation[]=chats.map(c=>({id:c.id,entry:c.entry,limited:!!c.limited,events:[]}));
  const byChat=new Map(conversations.map(c=>[c.id,c]));
  for(const m of visible)byChat.get(m.chat_id)?.events.push({at:m.at,incoming:m.incoming,source:m.attendanceSource});

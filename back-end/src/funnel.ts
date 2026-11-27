@@ -1,12 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import {normalize,ctaRecordFor} from './cta.js';
-import type { Evidence, FunnelLead, FunnelResult, Origin, Stage, ObservedTag } from '../../shared/funnel.js';
+import type { Evidence, FunnelLead, FunnelResult, Origin, Stage, ObservedTag, MetaLeadCohort } from '../../shared/funnel.js';
 import {defaultPeriod} from '../../shared/period.js';
 
 export {normalize} from './cta.js';
 type Contact={id:string;label:string;phone:string|null;first_inbound_at:string|null;source:string;tags?:ObservedTag[]};
-type Message={contactId:string;chatId:string;id:string;at:string;incoming:number;content?:string;ctaKey?:string|null;source:string|null};
+type Message={contactId:string;chatId:string;id:string;at:string;incoming:number;firstInChat?:boolean;content?:string;ctaKey?:string|null;adSourceId?:string|null;adAttributionVersion?:number;source:string|null;humanSource?:string|null};
 type RecordLead={id:string;label:string;phone:string|null;enteredAt:string|null;googleTag:boolean;messages:Message[];tags:ObservedTag[]};
 type AdsCache={connected?:boolean;period?:{start:string;end:string};syncedAt?:string;timezone?:string;currency?:string;daily?:{date:string;clicks:number;impressions:number;spend:number}[];conversionDaily?:{date:string;action:string;value:number}[];actions?:{resourceName:string;name:string;status:string;type?:string;category?:string}[]};
 export type Filters={start?:string;end?:string;action?:string;origin?:Origin|'all';stage?:Stage;q?:string;cursor?:number;limit?:number};
@@ -42,8 +42,17 @@ export function summarize(leads:RecordLead[],ads:AdsCache,filters:Filters,publis
  if(!validDay(start)||!validDay(end)||start>end||Date.parse(end)-Date.parse(start)>366*86400000)throw invalid();
  const inPeriod=(date:string)=>date>=start&&date<=end;
  const items:FunnelLead[]=[];
- let returning=0,unknownEntry=0;
+ let returning=0,unknownEntry=0,siteChannelLeads=0,siteAttended=0,siteWonObserved=0,metaAdEvidence=0;
+ const metaCohorts=new Map<string,MetaLeadCohort>();
  for(const lead of leads){
+  const won=lead.tags.some(t=>normalize(t.name)==='venda ok');
+  const firstMessages=lead.messages.filter(m=>m.incoming&&inPeriod(day(m.at))&&(m.firstInChat===true||(m.firstInChat===undefined&&lead.enteredAt===m.at)));
+  const siteChats=firstMessages.filter(m=>!!ctaRecordFor(m));
+  if(siteChats.length){siteChannelLeads++;if(won)siteWonObserved++;if(siteChats.some(first=>lead.messages.some(m=>!m.incoming&&(m.humanSource===undefined?m.source:m.humanSource)==='Member'&&m.chatId===first.chatId&&m.at>=first.at&&day(m.at)<=end)))siteAttended++;}
+  // JBR's commercial rule: a recognized opening CTA takes precedence for Google.
+  // Group complete ad sets, instead of adding per-ad counts that duplicate people.
+  const adIds=siteChats.length?[]:[...new Set(firstMessages.filter(m=>m.adAttributionVersion===1&&m.adSourceId&&/^\d{1,40}$/.test(m.adSourceId)).map(m=>m.adSourceId!))].sort();
+  if(adIds.length){metaAdEvidence++;const key=adIds.join(',');let row=metaCohorts.get(key);if(!row){row={adIds,leads:0,wonObserved:0};metaCohorts.set(key,row);}row.leads++;if(won)row.wonObserved++;}
   if(!lead.enteredAt){unknownEntry++;continue;}
   const enteredDay=day(lead.enteredAt);
   if(!inPeriod(enteredDay)){if(enteredDay<start&&lead.messages.some(m=>m.incoming&&inPeriod(day(m.at))))returning++;continue;}
@@ -53,7 +62,7 @@ export function summarize(leads:RecordLead[],ads:AdsCache,filters:Filters,publis
   const origin:Origin=firstMessageKnown&&match?'site':lead.googleTag?'google':'unknown';
   // A response must follow an inbound message in the same chat; bots and External are excluded.
   const chatInbounds=new Map<string,string>();let reply:Message|undefined;
-  for(const m of lead.messages){if(day(m.at)>end)continue;if(m.incoming){if(!chatInbounds.has(m.chatId))chatInbounds.set(m.chatId,m.at);}else if(m.source==='Member'&&chatInbounds.has(m.chatId)&&m.at>=chatInbounds.get(m.chatId)!){reply=m;break;}}
+  for(const m of lead.messages){if(day(m.at)>end)continue;if(m.incoming){if(!chatInbounds.has(m.chatId))chatInbounds.set(m.chatId,m.at);}else if((m.humanSource===undefined?m.source:m.humanSource)==='Member'&&chatInbounds.has(m.chatId)&&m.at>=chatInbounds.get(m.chatId)!){reply=m;break;}}
   const evidence:Evidence[]=[{at:lead.enteredAt,kind:'entry',text:'Primeira entrada conhecida'}];
   if(incoming)evidence.push({at:incoming.at,kind:'message',text:match?'CTA do site reconhecido':'Mensagem recebida',contentStored:false,chatId:incoming.chatId,messageId:incoming.id,...(match?{sources:match}:{})});
   if(reply)evidence.push({at:reply.at,kind:'reply',text:'Resposta humana registrada',contentStored:false,chatId:reply.chatId,messageId:reply.id});
@@ -66,14 +75,14 @@ export function summarize(leads:RecordLead[],ads:AdsCache,filters:Filters,publis
  const daily=available?ads.daily!.filter(d=>inPeriod(d.date)):[];
  const adsTotals=daily.reduce((s,d)=>({spend:s.spend+d.spend,clicks:s.clicks+d.clicks,impressions:s.impressions+d.impressions}),{spend:0,clicks:0,impressions:0});
  const conversions=available&&action&&ads.conversionDaily?ads.conversionDaily.filter(d=>d.action===action&&inPeriod(d.date)).reduce((n,d)=>n+d.value,0):null;
- const origins=([{id:'site',label:'Site · CTA reconhecido'},{id:'google',label:'Google · etiqueta'},{id:'unknown',label:'A identificar'}] as const).map(o=>({...o,count:items.filter(l=>l.origin===o.id).length}));
+ const origins=([{id:'site',label:'Google · CTA do site'},{id:'google',label:'Google · etiqueta'},{id:'unknown',label:'A identificar'}] as const).map(o=>({...o,count:items.filter(l=>l.origin===o.id).length}));
  const attended=items.filter(l=>l.attended).length;
  const q=normalize(filters.q??'');
  const phoneQuery=/^[+\d\s().-]+$/.test(filters.q??'')?(filters.q??'').replace(/\D/g,''):'';
  const filtered=items.filter(l=>(!filters.origin||filters.origin==='all'||l.origin===filters.origin)&&(!filters.stage||filters.stage==='all'||(filters.stage==='attended'?l.attended:!l.attended))&&(!q||normalize(l.label+' '+(l.phone??'')).includes(q)||!!(l.phone&&phoneQuery&&l.phone.replace(/\D/g,'').includes(phoneQuery)))).sort((a,b)=>b.enteredAt.localeCompare(a.enteredAt)||a.id.localeCompare(b.id));
  const cursor=filters.cursor??0,limit=filters.limit??20;
  return {period:{start,end},availableAdsPeriod:ads.period??null,timezone,publishedAt,adsSyncedAt:ads.syncedAt??null,
-  metrics:{leads:items.length,attended,unanswered:items.length-attended,site:origins[0].count,returning,unknownEntry,missingMessages:items.filter(l=>!l.firstMessageKnown).length,qualified:null,proposals:null,won:null},
+  metrics:{leads:items.length,attended,unanswered:items.length-attended,site:origins[0].count,siteChannelLeads,siteAttended,siteWonObserved,metaAdEvidence,returning,unknownEntry,missingMessages:items.filter(l=>!l.firstMessageKnown).length,qualified:null,proposals:null,won:null},metaAdCohorts:[...metaCohorts.values()],
   ads:{available,spend:available?adsTotals.spend:null,clicks:available?adsTotals.clicks:null,impressions:available?adsTotals.impressions:null,conversions,action,currency:ads.currency??'BRL',actions},origins,items:filtered.slice(cursor,cursor+limit),total:filtered.length,nextCursor:cursor+limit<filtered.length?cursor+limit:null};
 }
 
@@ -109,7 +118,7 @@ export function registerFunnel(app:FastifyInstance,db:DatabaseSync|(()=>Promise<
     const messages=db.prepare(`SELECT c.contact_id AS contactId,m.chat_id AS chatId,m.id,m.at,m.incoming,m.content,json_extract(r.raw_json,'$.source') AS source,json_extract(r.raw_json,'$.ctaKey') AS ctaKey
      FROM crm_messages m JOIN crm_chats c ON c.id=m.chat_id
      LEFT JOIN messages r ON r.organization_id=substr(m.chat_id,1,instr(m.chat_id,':')-1) AND r.chat_id=substr(m.chat_id,instr(m.chat_id,':')+1) AND r.id=m.id
-     WHERE m.private=0`).all() as Message[];
+     WHERE m.private=0`).all() as unknown as Message[];
     for(const m of messages){if(m.ctaKey===null)delete m.ctaKey;if(m.content==='')delete m.content;}
     const published=db.prepare("SELECT value FROM crm_meta WHERE key='publishedAt'").get();
     publishedAt=published?JSON.parse(String(published.value)):null;

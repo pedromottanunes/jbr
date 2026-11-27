@@ -12,12 +12,41 @@ const message=(id:string,at:string,incoming=1,content=cta,source=incoming?'Conta
 const ads={connected:true,period:{start:'2026-11-01',end:'2026-11-20'},timezone:'America/Sao_Paulo',daily:[{date:'2026-11-20',spend:40,clicks:10,impressions:100}],actions:[{resourceName:'action/1',name:'Contato',status:'ENABLED'}],conversionDaily:[{date:'2026-11-20',action:'action/1',value:2.5}]};
 const filters={start:'2026-11-20',end:'2026-11-20'};
 
+it('includes returning leads with a first-message CTA, without counting automated replies or duplicate chats twice',()=>{
+ const first={...message('a','2026-11-20T10:00:00Z',1,cta,'Contact','chat1'),firstInChat:true};
+ const second={...message('a','2026-11-20T12:00:00Z',1,cta,'Contact','chat2'),firstInChat:true};
+ const automated={...message('a','2026-11-20T10:01:00Z',0,'','Member','chat1'),humanSource:null};
+ const leads=groupLeads([{...contact('a','2026-11-01T10:00:00Z'),tags:[{name:'VENDA OK',scopes:['contato'] as ('contato'|'conversa')[]}]}],[first,second,automated]);
+ const report=summarize(leads,ads,filters,null);
+ expect(report.metrics.siteChannelLeads).toBe(1);expect(report.metrics.siteAttended).toBe(0);expect(report.metrics.siteWonObserved).toBe(1);
+ expect(report.metrics.leads).toBe(0);
+});
+
 it('preserves observed tags and their scope when duplicate contacts are grouped',()=>{
  const at='2026-11-20T10:00:00Z';
  const contacts=[{...contact('o:a',at,'5541999990000'),tags:[{name:'VENDA OK',scopes:['contato'] as ('contato'|'conversa')[]}]},{...contact('o:b',at,'5541999990000'),tags:[{name:'VENDA OK',scopes:['conversa'] as ('contato'|'conversa')[]},{name:'ANTT',scopes:['contato'] as ('contato'|'conversa')[]}]}];
  const result=summarize(groupLeads(contacts,[]),ads,filters,null);
  expect(result.items).toHaveLength(1);expect(result.items[0].tags).toEqual([{name:'ANTT',scopes:['contato']},{name:'VENDA OK',scopes:['contato','conversa']}]);
  expect(result.metrics.won).toBeNull();
+});
+
+it('counts unique Meta contacts across multiple ads, respects the period and gives CTA openings precedence',()=>{
+ const at='2026-11-20T10:00:00Z';
+ const contacts=['a','b','google','later','outside'].map(id=>({...contact('o:'+id,at,id==='a'?'5541999990000':null),tags:[{name:'VENDA OK',scopes:['contato'] as ('contato'|'conversa')[]}]}));
+ contacts.push({...contact('o:duplicate',at,'5541999990000'),tags:[]});
+ const first=(id:string,ad:string,chat=id,text='Bom dia',when=at)=>({...message('o:'+id,when,1,text,'Contact',chat),firstInChat:true,adAttributionVersion:1,adSourceId:ad});
+ const messages=[first('a','100'),first('a','200','return'),first('duplicate','100'),first('b','200'),first('google','100','google',cta),{...first('later','100'),firstInChat:false},first('outside','100','outside','Olá','2026-11-21T03:00:00Z')];
+ const report=summarize(groupLeads(contacts,messages),ads,filters,null);
+ expect(report.metrics.metaAdEvidence).toBe(2);
+ expect(report.metaAdCohorts).toEqual([{adIds:['100','200'],leads:1,wonObserved:1},{adIds:['200'],leads:1,wonObserved:1}]);
+ expect(report.metrics.siteChannelLeads).toBe(1);expect(report.metrics.siteWonObserved).toBe(1);
+ expect(JSON.stringify(report.metaAdCohorts)).not.toContain('5541999990000');
+});
+
+it('uses the same human-response rule in the channel and general funnels',()=>{
+ const at='2026-11-20T10:00:00Z';
+ const report=summarize(groupLeads([contact('a',at)],[message('a',at),{...message('a','2026-11-20T11:00:00Z',0),humanSource:null}]),ads,filters,null);
+ expect(report.metrics.siteChannelLeads).toBe(1);expect(report.metrics.siteAttended).toBe(0);expect(report.metrics.attended).toBe(0);
 });
 
 it('deduplicates phone variants, preserves earliest entry, and does not merge organizations',()=>{

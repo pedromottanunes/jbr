@@ -2,7 +2,7 @@ import {validPeriod,type Period} from '../../../shared/period.js';
 import {localDay} from '../../../shared/business-hours.js';
 import {ctaCatalogVersion} from '../cta.js';
 
-export const attendanceAnalysisVersion=1;
+export const attendanceAnalysisVersion=2;
 export const recentRefreshMs=15*60_000;
 export const historicalRefreshMs=24*60*60_000;
 const DAY=86400000;
