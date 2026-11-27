@@ -33,9 +33,18 @@ No Atlas, mantenha liberadas as faixas de saída exibidas em **Connect → Outbo
 
 ## Funcionamento no plano Free
 
+### Atualização dos relatórios
+
+- Google e Meta usam cache automático de uma hora e intervalo mínimo de dez minutos para atualização manual. Abrir filtros lê o Atlas; a coleta externa é enfileirada, deduplicada e acompanhada por consultas de status.
+- O botão **Atualizar dados** do Google agora solicita a coleta externa. Na Visão geral, **Atualizar painel** faz a mesma solicitação e relê os indicadores do CRM.
+- Google conserva a cobertura histórica. As coletas automáticas renovam os últimos 90 dias dentro dessa cobertura e intervalos ainda ausentes, sem sobrepor consultas. Uma atualização manual também inclui o período escolhido. O histórico completo é reconciliado semanalmente; a primeira execução após esta mudança faz uma revisão completa. Isso permite incorporar revisões tardias de conversões sem reconsultar todo o histórico em cada atualização.
+- As linhas Google são armazenadas em blocos de até 200 linhas/1 MiB, com geração publicada atomicamente e compatibilidade com o formato anterior. Dados inalterados reutilizam a geração; falhas preservam a anterior. Versões substituídas são limpas após a janela de segurança dos leitores.
+- A Meta possui uma faixa de execução independente. Uma coleta Google/Umbler não bloqueia a Meta, mas cada provedor continua com exclusão mútua, limites persistidos, cancelamento e tentativas limitadas. Não há paralelismo ilimitado de chamadas.
+- Teste isolado no mesmo Atlas com os dados reais: 12.803 linhas preservadas, 71 documentos em vez de 12.803; publicação em 1,8 s, com igualdade integral dos relatórios e reutilização da geração no segundo envio. Esse tempo é uma medição local contra o Atlas, não uma garantia de latência no Render.
+
 O worker integrado só roda enquanto o Web Service está ativo. O Render pode suspendê-lo após 15 minutos sem tráfego; ao retornar, os dados publicados continuam no Atlas e a fila retoma com os bloqueios e checkpoints existentes. Não há promessa de atualização contínua com o serviço dormindo. Referência: [Render Free](https://render.com/docs/free).
 
-Não há um processo novo por clique ou por requisição. A conexão Mongo é compartilhada (pool máximo 8); o loop processa um lote por vez e respeita os limites e bloqueios dos provedores. O encerramento interrompe o loop e preserva o progresso. A retenção de conteúdo das conversas continua desativada; indicadores e metadados permanecem no Atlas.
+Não há um processo novo por clique ou por requisição. A conexão Mongo é compartilhada (pool máximo 8); cada faixa do worker processa um lote por vez (Meta independente, demais integrações sequenciais) e respeita os limites e bloqueios dos provedores. O encerramento interrompe o loop e preserva o progresso. A retenção de conteúdo das conversas continua desativada; indicadores e metadados permanecem no Atlas.
 
 Para execução contínua futura, é possível usar um serviço sempre ativo ou um Background Worker com `npm run start:worker`. Nesse caso, defina `EMBEDDED_WORKER=false` no Web Service. Não é necessário criar outro serviço para este teste.
 

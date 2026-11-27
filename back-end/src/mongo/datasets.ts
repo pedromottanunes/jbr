@@ -5,6 +5,7 @@ import {buildViews,type Rows} from './model.js';
 import {sourceKeys,viewNames} from './schema.js';
 import {stageGeneration,retireGeneration} from './publication-gc.js';
 import {messageStorage,sourceFacts} from './message-storage.js';
+import {adsStorageFormat,packAdsRows,unpackAdsRows} from './ads-storage.js';
 
 export const digest=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 export const viewGeneration=(revision:any,name:string):string=>revision.generations?.[name]??revision.generation;
@@ -101,14 +102,14 @@ export async function publishAds(ctx:MongoContext,data:any,owner?:string,signal?
  if(!data.connected||!data.account?.id||!data.period?.start||!data.period?.end)throw new Error('Relatório Google inválido.');
  const previous=await ctx.collection('data_revisions').findOne({_id:'google'});
  const {daily,conversionDaily,campaigns,actions,reports,...header}=data;
- const contentHash=digest({daily,conversionDaily,campaigns,actions,reports}),generation=previous?.contentHash===contentHash?previous.generation:randomUUID();
+ const contentHash=digest({daily,conversionDaily,campaigns,actions,reports}),generation=previous?.storageFormat===adsStorageFormat&&previous?.contentHash===contentHash?previous.generation:randomUUID();
  const guard=async()=>{signal?.throwIfAborted();if(owner&&!await ctx.renew('google',owner))throw new Error('Posse da coleta Google expirada.');};
- const records:any[]=[];const add=(kind:string,items:any[])=>items.forEach((row,position)=>records.push({_id:generation+':'+kind+':'+position.toString(36),id:kind+':'+position,generation,kind,position,row}));
+ const records:any[]=[];let logicalRows=0;const add=(kind:string,items:any[])=>{logicalRows+=items.length;records.push(...packAdsRows(generation,kind,items));};
  for(const [kind,items] of Object.entries({daily,conversionDaily,campaigns,actions}))add(kind,items as any[]);
  const availability:Record<string,boolean>={};for(const [kind,report] of Object.entries(reports??{}) as [string,any][]){availability[kind]=report.available;add('report:'+kind,report.rows??[]);}
  if(previous?.generation!==generation){await guard();await stageGeneration(ctx,'google','ads_rows',generation);await bulk(ctx,'ads_rows',records,guard);}
  if(await ctx.collection('ads_rows').countDocuments({generation})!==records.length)throw new Error('Relatório incompleto.');
- const document={_id:'google',generation,contentHash,previous:previous?.generation===generation?previous.previous:previous?.generation??null,header,availability,rows:records.length,publishedAt:new Date()};
+ const document={_id:'google',generation,contentHash,storageFormat:adsStorageFormat,previous:previous?.generation===generation?previous.previous:previous?.generation??null,header,availability,rows:logicalRows,documents:records.length,publishedAt:new Date()};
  await guard();
  if(owner)await ctx.transaction(async session=>{
   const held=await ctx.collection('integration_leases').updateOne({_id:'google',owner,expiresAt:{$gt:new Date()}},{$set:{expiresAt:new Date(Date.now()+120000)}},{session});if(!held.matchedCount)throw new Error('Posse da coleta Google expirada.');
@@ -138,8 +139,8 @@ export class MongoReads {
   const r=await this.pointer('google');if(!r)return {connected:false,campaigns:[],metrics:null};
   if(this.adsCaches.get(profile)?.generation!==r.generation){
    const kinds=profile==='daily'?['daily']:['daily','conversionDaily','campaigns','actions'];
-   const data=this.ctx.collection('ads_rows').find({generation:r.generation,...(profile==='full'?{}:{kind:{$in:kinds}})},{projection:{_id:0,kind:1,row:1,position:1}}).sort({kind:1,position:1}).maxTimeMS(15000).toArray().then(rows=>{
-   const groups:Record<string,any[]>={};for(const row of rows)(groups[row.kind]??=[]).push(row.row);
+   const data=this.ctx.collection('ads_rows').find({generation:r.generation,...(profile==='full'?{}:{kind:{$in:kinds}})},{projection:{_id:0,kind:1,row:1,rows:1,position:1}}).sort({kind:1,position:1}).maxTimeMS(15000).toArray().then(rows=>{
+   const groups=unpackAdsRows(rows);
    return {daily:groups.daily??[],conversionDaily:groups.conversionDaily??[],campaigns:groups.campaigns??[],actions:groups.actions??[],...(profile==='full'?{reports:Object.fromEntries(Object.entries(r.availability).map(([k,available])=>[k,{available,rows:groups['report:'+k]??[]}]))}:{})};
   });this.adsCaches.set(profile,{generation:r.generation,data});data.catch(()=>{if(this.adsCaches.get(profile)?.data===data)this.adsCaches.delete(profile);});}
   return {...r.header,...await this.adsCaches.get(profile)!.data};

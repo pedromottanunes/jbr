@@ -2,6 +2,7 @@ import type {MongoContext} from './connection.js';
 import {validPeriod, type Period} from '../../../shared/period.js';
 import {mergeAttendancePeriods,subtractPeriods,umblerPeriods,missingAttendancePeriods,periodDays} from './attendance-period.js';
 import {mergeMetaPeriods} from '../../../shared/meta.js';
+import {googleFresh} from './google-periods.js';
 
 export type JobKind = 'google' | 'umbler' | 'budget' | 'meta';
 const active = (status: string) => status === 'queued' || status === 'running';
@@ -60,13 +61,20 @@ export async function enqueue(ctx: MongoContext, kind: JobKind, payload: Record<
           const merged = mergePeriods(r.payload, r.pendingPayload, payload);
           const current = r.pendingPayload ?? r.payload;
           if (!merged || (current?.start === merged.start && current?.end === merged.end)) return;
-          await jobs.updateOne({_id: kind}, {$set: {[r.status === 'running' ? 'pendingPayload' : 'payload']: merged}}, {session});
+          await jobs.updateOne({_id: kind}, {$set: {[r.status === 'running' ? 'pendingPayload' : 'payload']: {...merged,refresh:!!(payload.refresh||current?.refresh)}}}, {session});
           return;
         }
-        if (kind === 'google') mergePeriods(payload);
+        if (kind === 'google') {
+          mergePeriods(payload);
+          // Recheck under the queue transaction: a second tab may arrive just after publication.
+          if(validPeriod(payload)){
+            const revision=await ctx.collection('data_revisions').findOne({_id:'google'},{session});
+            if(googleFresh(revision?.header,payload,!!requested.refresh))return;
+          }
+        }
         await jobs.updateOne({_id: kind}, {
           $set: {kind, status: 'queued', payload:requested, attempts: 0, batches:0, availableAt: new Date(Math.max(+now, +(r?.availableAt ?? 0))), requestedAt: now, message: null},
-          $inc: {revision: 1}, $unset: {owner: '', leaseUntil: '', pendingPayload: '', completedAt: ''},
+          $inc: {revision: 1}, $unset: {owner: '', leaseUntil: '', pendingPayload: '', completedAt: '', startedAt:''},
         }, {upsert: true, session});
       });
       return jobStatus(ctx, kind);

@@ -1,5 +1,5 @@
-import {useEffect,useSyncExternalStore} from 'react';
-import {useQuery,useQueryClient} from '@tanstack/react-query';
+import {useEffect,useState,useSyncExternalStore} from 'react';
+import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {validPeriod,type Period} from '../../shared/period';
 import {getJson,sendJson} from './api';
 const key='jbr-report-period-v1';
@@ -14,21 +14,23 @@ export function usePeriod(fallback?:Period){
  return [period,setPeriod] as const;
 }
 type Sync={status:'idle'|'running'|'complete'|'error';period?:Period;message?:string;completedAt?:string;revision?:number};
-export function useGoogleCoverage(period:Period|undefined,available:boolean|undefined){
- const client=useQueryClient();const missing=validPeriod(period)&&available===false;
- // A POST queues once per selected period; polling only reads job state.
- // The shared query promise also prevents React StrictMode from queuing twice.
- const request=useQuery({queryKey:['google-period-sync',period?.start,period?.end],enabled:missing,staleTime:Infinity,retry:false,refetchOnMount:false,
+export function useGoogleCoverage(period:Period|undefined,available:boolean|undefined,syncedAt?:string|null){
+ const client=useQueryClient(),key=period?.start+':'+period?.end;
+ const [manual,setManual]=useState<{key:string;at:number}|null>(null);
+ const missing=validPeriod(period)&&available===false;
+ const needed=validPeriod(period)&&available!==undefined&&(missing||!syncedAt||Date.now()-Date.parse(syncedAt)>3600000);
+ const invalidate=()=>{for(const name of ['real-funnel','ads-detail','ads-crm'])void client.invalidateQueries({queryKey:[name]});};
+ const request=useQuery({queryKey:['google-period-sync',period?.start,period?.end],enabled:needed,staleTime:60000,retry:false,refetchOnWindowFocus:false,
   queryFn:()=>sendJson<Sync>('/ads/sync','POST',period)});
- const poll=useQuery({queryKey:['google-sync-status',period?.start,period?.end,request.dataUpdatedAt],enabled:missing&&request.data?.status==='running',retry:false,
+ const refresh=useMutation({mutationFn:()=>sendJson<Sync>('/ads/sync','POST',{...period,refresh:true}),onSuccess:d=>{if(d.status==='running')setManual({key,at:Date.now()});else invalidate();}});
+ const manualAt=manual?.key===key?manual.at:0;
+ const poll=useQuery({queryKey:['google-sync-status',period?.start,period?.end,request.dataUpdatedAt,manualAt],enabled:validPeriod(period)&&(request.data?.status==='running'||manualAt>0),retry:false,
   queryFn:({signal})=>getJson<Sync>('/ads/sync',signal),refetchInterval:q=>q.state.data?.status==='complete'||q.state.data?.status==='error'?false:5000});
- const state=request.data?.status==='running'?poll.data:request.data;
- useEffect(()=>{if(missing&&state?.status==='complete'){void client.invalidateQueries({queryKey:['real-funnel']});void client.invalidateQueries({queryKey:['ads-detail']});void client.invalidateQueries({queryKey:['ads-crm']});}},[missing,state?.status,state?.completedAt,client]);
- return missing?{
-  message:request.error?.message??poll.error?.message??(state?.status==='error'?state.message:'Sincronizando Google Ads para o período selecionado…'),
-  failed:!!request.error||!!poll.error||state?.status==='error',
-  retry:()=>{void request.refetch();},
- }:null;
+ const state=poll.data??(manualAt?undefined:request.data);
+ useEffect(()=>{if(state?.status==='complete'||state?.status==='error')invalidate();},[state?.status,state?.completedAt,client]);
+ const error=refresh.error?.message??request.error?.message??poll.error?.message??(state?.status==='error'?state.message:null);
+ const busy=refresh.isPending||request.isFetching||state?.status==='running'||(manualAt>0&&poll.isPending);
+ return {busy,failed:!!error,message:error??(busy?'Atualizando Google Ads. Você pode continuar usando o CRM.':null),retry:()=>{if(validPeriod(period))refresh.mutate();}};
 }
 
 export const readSelectedPeriod=()=>selected;

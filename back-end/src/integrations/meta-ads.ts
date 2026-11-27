@@ -4,7 +4,7 @@ import type {Period} from '../../../shared/period.js';
 
 const number=(v:unknown)=>Number.isFinite(Number(v))&&Number(v)>=0?Number(v):0;
 const text=(v:unknown,max=500)=>typeof v==='string'?v.slice(0,max):'';
-function actions(list:any):Record<string,number>{return Object.fromEntries((Array.isArray(list)?list:[]).filter(r=>typeof r.action_type==='string').map(r=>[text(r.action_type,180),number(r.value)]));}
+function actions(list:any):Record<string,number>{return Object.fromEntries((Array.isArray(list)?list:[]).filter(r=>typeof r.action_type==='string').map(r=>[text(r.action_type,180),Number.isFinite(Number(r.value))?Number(r.value):0]));}
 export function metaMetrics(r:any):MetaMetrics{return {spend:number(r.spend),impressions:number(r.impressions),clicks:number(r.clicks),linkClicks:number(r.inline_link_clicks),reach:r.reach==null?null:number(r.reach),actions:actions(r.actions),values:actions(r.action_values)};}
 export function safeMetaUrl(value:unknown,image=false){
  try{const u=new URL(String(value));if(u.protocol!=='https:'||u.username||u.password||u.searchParams.has('access_token'))return null;

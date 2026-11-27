@@ -12,7 +12,7 @@ describe('Meta reporting semantics',()=>{
  it('never presents a partial collection as a consolidated total',()=>{const d=metaDashboard(period,[snapshot(metaAccounts[0].id)]);expect(d.available).toBe(false);expect(d.total).toBeNull();expect(d.accounts.filter(a=>a.available)).toHaveLength(1);expect(metaDashboard(period,[snapshot(metaAccounts[0].id)],metaAccounts[0].id).total?.spend).toBe(100);});
  it('isolates periods and accounts and does not combine currencies',()=>{const ss=metaAccounts.map(a=>snapshot(a.id));expect(metaDashboard({...period,end:'2026-11-25'},ss).total).toBeNull();ss[1].currency='USD';expect(metaDashboard(period,ss).total).toBeNull();expect(metaDashboard(period,ss,metaAccounts[0].id).total?.reach).toBe(500);});
  it('retains exact requested periods instead of merging reach windows',()=>{expect(mergeMetaPeriods([period],[period,{...period,start:'2026-11-02'}])).toHaveLength(2);expect(()=>mergeMetaPeriods([{start:'bad',end:'bad'}])).toThrow();});
- it('normalizes missing optional metrics without guessing reach',()=>{expect(metaMetrics({spend:'12.30',clicks:'4',actions:[{action_type:'lead',value:'2'}]})).toMatchObject({spend:12.3,clicks:4,reach:null,actions:{lead:2}});});
+ it('normalizes missing optional metrics without guessing reach and preserves net adjustments',()=>{expect(metaMetrics({spend:'12.30',clicks:'4',actions:[{action_type:'lead',value:'2'},{action_type:'post_interaction_net',value:'-3'}]})).toMatchObject({spend:12.3,clicks:4,reach:null,actions:{lead:2,post_interaction_net:-3}});});
 });
 describe('Meta guarded transport',()=>{
  it('uses Authorization and cursor pagination, never a provider next URL',async()=>{

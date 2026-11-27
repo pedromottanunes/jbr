@@ -17,6 +17,7 @@ import {messageStorage} from './message-storage.js';
 import {setMessageStorage} from './message-retention.js';
 import {ensureAttendanceCoverage} from './attendance-coverage.js';
 import {recentPeriod} from './attendance-period.js';
+import {googleFresh} from './google-periods.js';
 
 const escape=(v:string)=>v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const project={_id:0,generation:0,search:0};
@@ -54,10 +55,10 @@ export function registerMongoData(app:FastifyInstance,ctx:MongoContext){
   if(!validPeriod(req.body))return reply.code(400).send({message:'Selecione até 366 dias válidos.'});
   const data=await read.adsHeader(),today=new Intl.DateTimeFormat('en-CA',{timeZone:data.timezone??'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   if(req.body.end>today)return reply.code(400).send({message:'O período não pode terminar no futuro.'});
-  if(!req.body.refresh&&data.connected&&req.body.start>=data.period.start&&req.body.end<=data.period.end)return {status:'complete',period:req.body};
+  if(googleFresh(data,req.body,!!req.body.refresh))return {status:'complete',period:req.body};
   const period={start:data.period?.start<req.body.start?data.period.start:req.body.start,end:data.period?.end>req.body.end?data.period.end:req.body.end};
   if(!validPeriod(period))return reply.code(400).send({message:'A cobertura total deve caber em 366 dias.'});
-  return reply.code(202).send(await requestJob('google',period));
+  return reply.code(202).send(await requestJob('google',{start:req.body.start,end:req.body.end,refresh:!!req.body.refresh}));
  });
  app.get('/api/v1/leads/tags',async()=>{const r=await read.revision();return ctx.collection('contacts').aggregate([{$match:{generation:viewGeneration(r,'contacts')}},{$unwind:'$tags'},{$group:{_id:'$tags.name',count:{$sum:1}}},{$project:{_id:0,name:'$_id',count:1}},{$sort:{name:1}}],{maxTimeMS:15000}).toArray();});
  type Page={q?:string;tag?:string;cursor?:number;limit?:number};

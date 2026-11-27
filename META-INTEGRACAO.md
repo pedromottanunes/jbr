@@ -70,6 +70,8 @@ O painel Meta contém filtros por conta, campanha e ação de conversão; invest
 
 ### Contrato do backend
 
+Atualização de desempenho (27/11/2026): a Meta tem uma fila de execução independente de Google/Umbler, limitada a uma tarefa Meta por vez. Os bloqueios persistidos por provedor continuam impedindo coletas concorrentes entre Render e computador local. Há no máximo duas tarefas de integração simultâneas no worker integrado; o pool Mongo continua compartilhado.
+
 - `GET /api/v1/meta/detail?start=AAAA-MM-DD&end=AAAA-MM-DD&account=ID&campaign=ID`: lê somente o cache do MongoDB. Filtros de conta/campanha são opcionais. Não chama a Meta.
 - `POST /api/v1/meta/sync`: recebe `{start,end,refresh?}` e registra uma tarefa deduplicada. Não realiza coleta dentro da requisição HTTP.
 - `GET /api/v1/meta/sync`: acompanha a tarefa persistida. As três rotas usam a autenticação existente do CRM.
