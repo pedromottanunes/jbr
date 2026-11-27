@@ -56,7 +56,7 @@ const sections:Record<string,LucideIcon>={
   'Campanhas':Megaphone,'Palavras-chave':ScanSearch,'Grupos de anúncios':Layers3,
   'Termos de pesquisa':ListFilter,'Anúncios e textos':FileText,
   'Evolução diária':ChartNoAxesCombined,'Dias da semana':ChartNoAxesCombined,
-  'Horários':Clock3,'Funil de leads':Waypoints,'Origem dos leads':Globe2,
+  'Horários':Clock3,'Funil de leads':Waypoints,'Atendimento geral':MessageSquareReply,'Origem dos leads':Globe2,
   'Google + CRM':Waypoints,'Integrações':Layers3,'Cobertura da coleta':BadgeCheck,
 };
 export function HeadingIcon({label}:{label:string}) {
